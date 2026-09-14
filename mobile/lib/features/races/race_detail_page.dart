@@ -1,0 +1,420 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+import '../../core/language.dart';
+import '../../data/race_repository.dart';
+import '../../data/reminder_service.dart';
+import '../../shared/race_feed_view.dart';
+import '../home/home_page.dart';
+import '../home/reminder_controls.dart';
+
+class RaceDetailPage extends StatefulWidget {
+  final Race race;
+  final RaceRepository repository;
+  final ReminderService? reminders;
+  final Future<void> Function(bool)? syncReminders;
+  final bool spoilerHidden;
+  final VoidCallback? onReveal;
+  const RaceDetailPage({
+    super.key,
+    required this.race,
+    required this.repository,
+    this.reminders,
+    this.syncReminders,
+    this.spoilerHidden = false,
+    this.onReveal,
+  });
+
+  @override
+  State<RaceDetailPage> createState() => _RaceDetailPageState();
+}
+
+class _RaceDetailPageState extends State<RaceDetailPage> {
+  bool _qualifying = false;
+  bool _revealed = false;
+  final Map<bool, Future<ResultsFeed>> _requests = {};
+  final Map<bool, ResultsFeed> _saved = {};
+
+  Future<ResultsFeed> _load() => _requests.putIfAbsent(
+    _qualifying,
+    () => widget.repository.results(widget.race.id, qualifying: _qualifying),
+  );
+
+  void _refresh() => setState(() {
+    _requests.remove(_qualifying);
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final race = widget.race;
+    return Scaffold(
+      appBar: AppBar(title: Text(tr(context, 'Race details'))),
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tr(context, _phaseLabel(race.lifecyclePhase)),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    tr(context, race.name),
+                    style: Theme.of(context).textTheme.displaySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(tr(context, race.circuit)),
+                  Text(
+                    race.startsAt == null
+                        ? race.date
+                        : localDate(context, race.startsAt!),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (race.circuitLayout case final layout?) ...[
+                    const SizedBox(height: 24),
+                    Semantics(
+                      image: true,
+                      label:
+                          '${tr(context, race.circuit)} ${tr(context, 'circuit layout')}',
+                      child: ExcludeSemantics(
+                        child: SizedBox(
+                          height: 220,
+                          width: double.infinity,
+                          child: SvgPicture.asset(
+                            layout.assetPath,
+                            fit: BoxFit.contain,
+                            colorFilter: ColorFilter.mode(
+                              Theme.of(context).colorScheme.onSurface,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      [
+                        if (layout.turns != null)
+                          '${layout.turns} ${tr(context, 'turns')}',
+                        layout.license,
+                      ].join(' · '),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+                  if (race.lifecyclePhase != 'post_race') ...[
+                    _WeekendSection(race: race),
+                    if (race.lifecyclePhase == 'pre_race') ...[
+                      const SizedBox(height: 32),
+                      ReminderControls(
+                        race: race,
+                        service: widget.reminders,
+                        stale: false,
+                        syncReminders: widget.syncReminders,
+                      ),
+                    ],
+                  ] else if (widget.spoilerHidden && !_revealed)
+                    _SpoilerGate(
+                      onReveal: () {
+                        setState(() => _revealed = true);
+                        widget.onReveal?.call();
+                      },
+                    )
+                  else
+                    _results(),
+                  const SizedBox(height: 32),
+                  Text(
+                    tr(context, 'Source: Jolpica F1'),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  SelectableText(
+                    race.source,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _results() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          ChoiceChip(
+            label: Text(tr(context, 'Race result')),
+            selected: !_qualifying,
+            onSelected: (_) => setState(() => _qualifying = false),
+          ),
+          ChoiceChip(
+            label: Text(tr(context, 'Qualifying')),
+            selected: _qualifying,
+            onSelected: (_) => setState(() => _qualifying = true),
+          ),
+        ],
+      ),
+      const SizedBox(height: 24),
+      FutureBuilder<ResultsFeed>(
+        key: ValueKey(_qualifying),
+        future: _load(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(
+              child: CircularProgressIndicator(
+                semanticsLabel: tr(context, 'Loading results'),
+              ),
+            );
+          }
+          if (snapshot.hasData) _saved[_qualifying] = snapshot.data!;
+          final feed = _saved[_qualifying];
+          if (feed == null) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tr(context, 'Unable to load results. Please try again.')),
+                TextButton(
+                  onPressed: _refresh,
+                  child: Text(tr(context, 'Retry')),
+                ),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (feed.stale || snapshot.hasError)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    tr(
+                      context,
+                      'Showing saved results. They may have changed.',
+                    ),
+                  ),
+                ),
+              if (feed.entries.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    tr(
+                      context,
+                      'Results have not been published or are unavailable for this session.',
+                    ),
+                  ),
+                ),
+              if (!_qualifying && feed.entries.isNotEmpty) ...[
+                Text(
+                  tr(context, 'Fastest lap'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                if (feed.fastestLap case final lap?) ...[
+                  Text(
+                    lap.time,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  Text('${lap.driver} · ${tr(context, 'Lap')} ${lap.lap}'),
+                ] else
+                  Text(tr(context, 'Not available')),
+                const SizedBox(height: 24),
+                const Divider(),
+              ],
+              for (final entry in feed.entries) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${entry.classification}. ${entry.driver}',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      Text(
+                        tr(context, entry.team),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_qualifying)
+                        Wrap(
+                          spacing: 24,
+                          runSpacing: 8,
+                          children: [
+                            Text('Q1  ${entry.q1 ?? '—'}'),
+                            Text('Q2  ${entry.q2 ?? '—'}'),
+                            Text('Q3  ${entry.q3 ?? '—'}'),
+                          ],
+                        )
+                      else ...[
+                        Text(
+                          '${tr(context, 'Time / Gap')}: ${entry.time ?? '—'}',
+                        ),
+                        Wrap(
+                          spacing: 24,
+                          runSpacing: 8,
+                          children: [
+                            Text(
+                              '${tr(context, 'Grid')}: ${entry.grid == 0 ? tr(context, 'Pit lane / unlisted') : entry.grid?.toString() ?? '—'}',
+                            ),
+                            Text(
+                              '${tr(context, 'Points')}: ${entry.points ?? '—'}',
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '${tr(context, 'Status')}: ${tr(context, entry.status ?? 'Not available')}',
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const Divider(),
+              ],
+              Text(
+                '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              TextButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh),
+                label: Text(tr(context, 'Refresh')),
+              ),
+            ],
+          );
+        },
+      ),
+    ],
+  );
+}
+
+class _SpoilerGate extends StatelessWidget {
+  final VoidCallback? onReveal;
+  const _SpoilerGate({this.onReveal});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        tr(context, 'Race completed'),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 8),
+      Text(tr(context, 'Results hidden')),
+      const SizedBox(height: 16),
+      FilledButton(
+        onPressed: onReveal,
+        child: Text(tr(context, 'Reveal this session')),
+      ),
+    ],
+  );
+}
+
+class _WeekendSection extends StatelessWidget {
+  final Race race;
+  const _WeekendSection({required this.race});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (race.currentSession case final current?) ...[
+        Text(
+          tr(context, 'Current session'),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          tr(context, current.kind),
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 24),
+      ] else if (race.nextSession case final next?) ...[
+        Text(
+          tr(context, 'Next session'),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          tr(context, next.kind),
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        if (next.startsAt != null) ...[
+          const SizedBox(height: 4),
+          Text(localDate(context, next.startsAt!)),
+          const SizedBox(height: 16),
+          Countdown(
+            startsAt: next.startsAt!,
+            label: tr(context, 'Next session starts in'),
+          ),
+        ],
+        const SizedBox(height: 24),
+      ],
+      const Divider(),
+      const SizedBox(height: 24),
+      Text(
+        tr(context, 'Weekend schedule'),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 12),
+      for (final session in race.sessions)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr(context, session.kind),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      tr(context, sessionStatusLabel(session.status)),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Flexible(
+                child: Text(
+                  session.startsAt == null
+                      ? tr(context, 'Not available')
+                      : localDate(context, session.startsAt!),
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
+  );
+}
+
+String _phaseLabel(String phase) => switch (phase) {
+  'race_weekend' => 'Race weekend',
+  'post_race' => 'Post-race',
+  _ => 'Pre-race',
+};

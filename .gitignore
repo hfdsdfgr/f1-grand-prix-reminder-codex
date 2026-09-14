@@ -1,0 +1,16 @@
+repositorytoken.txt
+*token*.txt
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+*.db
+.dart_tool/
+.flutter-plugins-dependencies
+build/
+.idea/
+*.iml
+local.properties
+.tools/
