@@ -6,6 +6,7 @@ import '../../data/race_repository.dart';
 import '../../data/follow_service.dart';
 import '../../data/reminder_service.dart';
 import '../../shared/race_feed_view.dart';
+import '../../shared/follow_context.dart';
 import '../home/home_page.dart';
 import '../home/reminder_controls.dart';
 
@@ -121,7 +122,11 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                   ],
                   const SizedBox(height: 32),
                   if (race.lifecyclePhase != 'post_race') ...[
-                    _WeekendSection(race: race),
+                    _WeekendSection(
+                      race: race,
+                      repository: widget.repository,
+                      follows: widget.follows,
+                    ),
                     if (race.lifecyclePhase == 'pre_race') ...[
                       const SizedBox(height: 32),
                       ReminderControls(
@@ -520,7 +525,13 @@ class _SpoilerGate extends StatelessWidget {
 
 class _WeekendSection extends StatelessWidget {
   final Race race;
-  const _WeekendSection({required this.race});
+  final RaceRepository repository;
+  final FollowService? follows;
+  const _WeekendSection({
+    required this.race,
+    required this.repository,
+    this.follows,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
@@ -567,6 +578,11 @@ class _WeekendSection extends StatelessWidget {
         ],
         const SizedBox(height: 24),
       ],
+      FollowContext(
+        repository: repository,
+        season: race.season,
+        follows: follows,
+      ),
       const Divider(),
       const SizedBox(height: 24),
       Text(

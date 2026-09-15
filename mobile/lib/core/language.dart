@@ -127,6 +127,8 @@ const _chinese = {
   'turns': '个弯角',
   'Settings': '设置',
   'Following': '关注',
+  'Following this season': '本赛季关注',
+  'Showing saved follow context. It may have changed.': '正在显示已保存的关注信息，归属可能已变化。',
   'Follow driver': '关注车手',
   'Following driver': '已关注车手',
   'Follow team': '关注车队',

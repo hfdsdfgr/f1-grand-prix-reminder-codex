@@ -10,7 +10,9 @@ from app.models import (
     NextRace, ProviderHealthRead, RaceFeed, Race, ScheduleRevisionRead,
 )
 from app.lifecycle import with_lifecycle
-from app.results import ResultsRepository, ResultsFeed, RaceStory, build_race_story
+from app.results import (
+    ResultsRepository, ResultsFeed, RaceStory, SeasonRosterFeed, build_race_story,
+)
 from app.repositories.schedules import ScheduleRepository
 
 
@@ -65,6 +67,16 @@ def races(
 @app.get('/api/v1/seasons', response_model=list[int])
 def seasons():
     return list(range(datetime.now(timezone.utc).year, 1949, -1))
+
+
+@app.get('/api/v1/seasons/{season}/roster', response_model=SeasonRosterFeed)
+def season_roster(season: int = Path(ge=1950, le=2100)):
+    # Ensure the season exists locally before linking source identities to it.
+    schedule(season)
+    try:
+        return app.state.results.roster(season)
+    except Exception as exc:
+        raise HTTPException(503, 'Season roster is temporarily unavailable. Please retry.') from exc
 
 
 @app.get('/api/v1/next-race', response_model=NextRace)

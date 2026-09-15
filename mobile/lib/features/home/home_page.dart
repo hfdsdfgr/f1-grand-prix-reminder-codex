@@ -9,6 +9,7 @@ import '../../data/follow_service.dart';
 import '../../data/reminder_service.dart';
 import 'reminder_controls.dart';
 import '../../shared/race_feed_view.dart';
+import '../../shared/follow_context.dart';
 import '../races/race_detail_page.dart';
 
 class HomePage extends StatelessWidget {
@@ -53,6 +54,11 @@ class HomePage extends StatelessWidget {
           Text(
             tr(context, race.circuit),
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          FollowContext(
+            repository: repository,
+            season: race.season,
+            follows: follows,
           ),
           const SizedBox(height: 32),
           if (race.lifecyclePhase == 'race_weekend') ...[

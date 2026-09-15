@@ -50,6 +50,63 @@ void main() {
     offline.dispose();
   });
 
+  testWidgets('home shows source-backed context for followed entries', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(812, 375);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    SharedPreferences.setMockInitialValues({
+      'followedDriverIds': jsonEncode([
+        {'id': 'drv_norris', 'name': 'Lando Norris'},
+      ]),
+    });
+    final preferences = await SharedPreferences.getInstance();
+    final repo = RaceRepository(
+      preferences: preferences,
+      client: MockClient(
+        (request) async => http.Response(
+          jsonEncode(
+            request.url.path.endsWith('/roster')
+                ? {
+                    'entries': [
+                      {
+                        'driver_id': 'drv_norris',
+                        'driver': 'Lando Norris',
+                        'team_id': 'tea_mclaren',
+                        'team': 'McLaren',
+                      },
+                    ],
+                    'source':
+                        'https://api.jolpi.ca/ergast/f1/2030/driverstandings/',
+                    'updated_at': '2030-09-13T00:00:00Z',
+                    'stale': false,
+                  }
+                : {
+                    'race': fixture(),
+                    'stale': false,
+                    'updated_at': '2030-09-13T00:00:00Z',
+                  },
+          ),
+          200,
+        ),
+      ),
+    );
+    addTearDown(repo.dispose);
+    await tester.pumpWidget(
+      GrandPrixApp(repository: repo, preferences: preferences),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('本赛季关注'), findsOneWidget);
+    expect(find.text('Lando Norris · McLaren'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test('countdown stops at zero and preserves elapsed-day arithmetic', () {
     final now = DateTime.utc(2030, 1, 1);
     expect(

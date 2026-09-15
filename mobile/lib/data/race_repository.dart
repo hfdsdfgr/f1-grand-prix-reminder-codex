@@ -45,6 +45,7 @@ class CircuitLayout {
 
 class Race {
   final String id, name, circuit, date, source;
+  final int season;
   final String? internalId, circuitId;
   final String status;
   final String lifecyclePhase;
@@ -56,6 +57,8 @@ class Race {
   final List<RaceSession> sessions;
   Race(Map<String, dynamic> json)
     : id = json['id'] as String,
+      season =
+          json['season'] as int? ?? DateTime.parse(json['date'] as String).year,
       internalId = json['internal_id'] as String?,
       circuitId = json['circuit_id'] as String?,
       status = json['status'] as String? ?? 'unknown',
@@ -178,6 +181,33 @@ class RaceRepository {
     if (cached) body['stale'] = true;
     return RaceStoryFeed(body);
   }
+
+  Future<SeasonRosterFeed> roster(int season) async {
+    final path = '/api/v1/seasons/$season/roster';
+    final (json, cached) = await _get(path, const Duration(seconds: 20));
+    final body = Map<String, dynamic>.from(json as Map);
+    if (cached) body['stale'] = true;
+    return SeasonRosterFeed(body);
+  }
+}
+
+class SeasonRosterEntry {
+  final String driverId, driver, teamId, team;
+  SeasonRosterEntry(Map<String, dynamic> json)
+    : driverId = json['driver_id'] as String,
+      driver = json['driver'] as String,
+      teamId = json['team_id'] as String,
+      team = json['team'] as String;
+}
+
+class SeasonRosterFeed {
+  final List<SeasonRosterEntry> entries;
+  final bool stale;
+  SeasonRosterFeed(Map<String, dynamic> json)
+    : entries = (json['entries'] as List)
+          .map((entry) => SeasonRosterEntry(entry as Map<String, dynamic>))
+          .toList(),
+      stale = json['stale'] as bool? ?? false;
 }
 
 class ResultEntry {

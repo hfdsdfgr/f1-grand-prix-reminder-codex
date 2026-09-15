@@ -5,6 +5,7 @@ import httpx
 from app.models import Race, Session
 
 BASE_URL = 'https://api.jolpi.ca/ergast/f1'
+HEADERS = {'User-Agent': 'GrandPrixReminder/0.1.0'}
 SESSION_KEYS = {
     'FirstPractice': 'FP1',
     'SecondPractice': 'FP2',
@@ -69,6 +70,19 @@ def normalize(raw: dict) -> Race:
 
 
 def fetch_season(season: int) -> list[Race]:
-    response = httpx.get(f'{BASE_URL}/{season}/', params={'limit': 100}, timeout=15)
+    response = httpx.get(
+        f'{BASE_URL}/{season}/', params={'limit': 100}, headers=HEADERS, timeout=15,
+    )
     response.raise_for_status()
     return [normalize(row) for row in response.json()['MRData']['RaceTable']['Races']]
+
+
+def fetch_driver_standings(season: int) -> list[dict]:
+    """Return source rows that explicitly associate each driver with a constructor."""
+    response = httpx.get(
+        f'{BASE_URL}/{season}/driverstandings/',
+        params={'limit': 100}, headers=HEADERS, timeout=15,
+    )
+    response.raise_for_status()
+    standings = response.json()['MRData']['StandingsTable'].get('StandingsLists') or []
+    return (standings[0].get('DriverStandings') or []) if standings else []

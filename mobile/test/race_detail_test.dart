@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:grand_prix_reminder/app.dart';
+import 'package:grand_prix_reminder/data/follow_service.dart';
 import 'package:grand_prix_reminder/data/race_repository.dart';
 import 'package:grand_prix_reminder/features/races/race_detail_page.dart';
 
@@ -198,6 +200,50 @@ void main() {
       expect(find.text(status), findsOneWidget);
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('weekend hub includes source-backed follow context', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final follows = FollowService(await SharedPreferences.getInstance());
+    await follows.toggleTeam('tea_team', 'Test Team');
+    final race = Race({
+      ...fixture(),
+      'lifecycle_phase': 'race_weekend',
+      'sessions': [],
+    });
+    final repo = RaceRepository(
+      client: MockClient(
+        (request) async => http.Response(
+          jsonEncode(
+            request.url.path.endsWith('/roster')
+                ? {
+                    'entries': [
+                      {
+                        'driver_id': 'drv_driver',
+                        'driver': 'Test Driver',
+                        'team_id': 'tea_team',
+                        'team': 'Test Team',
+                      },
+                    ],
+                    'stale': false,
+                  }
+                : {},
+          ),
+          200,
+        ),
+      ),
+    );
+    addTearDown(repo.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RaceDetailPage(race: race, repository: repo, follows: follows),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Following this season'), findsOneWidget);
+    expect(find.text('Test Driver · Test Team'), findsOneWidget);
   });
 
   testWidgets(

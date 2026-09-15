@@ -11,6 +11,7 @@ from app.models import RaceFeed
 from app.providers.jolpica import normalize
 from app.results import (
     ResultsRepository, build_race_story, fetch_season_summaries, normalize_results,
+    SeasonRosterEntry, SeasonRosterFeed,
 )
 from app.repositories.schedules import ScheduleRepository
 from test_schedules import sample
@@ -22,6 +23,56 @@ def row(**overrides):
 
 
 class ResultsTests(unittest.TestCase):
+    def test_source_roster_uses_result_identity_and_falls_back_to_cache(self):
+        standings = [{
+            'Driver': {
+                'driverId': 'test-driver', 'givenName': 'Test', 'familyName': 'Driver',
+                'nationality': 'Test', 'dateOfBirth': '2000-01-01', 'permanentNumber': '42',
+            },
+            'Constructors': [{'constructorId': 'test-team', 'name': 'Test Team'}],
+        }]
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/data.db'
+            ScheduleRepository(path)._persist(RaceFeed(
+                races=[normalize(sample())], updated_at=datetime.now(timezone.utc),
+            ))
+            repo = ResultsRepository(path)
+            result = repo._persist(2026, 1, 'results', normalize_results([
+                row(Driver={
+                    'driverId': 'test-driver', 'givenName': 'Test', 'familyName': 'Driver',
+                }, Constructor={'constructorId': 'test-team', 'name': 'Test Team'}),
+            ], 'https://example.com/results', 'results'))
+            with patch('app.results.fetch_driver_standings', return_value=standings) as fetch:
+                first = repo.roster(2026)
+                second = repo.roster(2026)
+            self.assertEqual(fetch.call_count, 1)
+            self.assertEqual(first.entries[0].driver_id, result.entries[0].driver_id)
+            self.assertEqual(first.entries[0].team_id, result.entries[0].team_id)
+            self.assertEqual(second.entries[0].driver, 'Test Driver')
+            with patch('app.results.datetime') as clock, \
+                    patch('app.results.fetch_driver_standings', side_effect=RuntimeError):
+                clock.now.return_value = datetime.now(timezone.utc) + timedelta(minutes=16)
+                self.assertTrue(repo.roster(2026).stale)
+
+    def test_roster_endpoint_returns_normalized_entries(self):
+        roster = SeasonRosterFeed(
+            entries=[SeasonRosterEntry(
+                driver_id='drv_driver', driver='Test Driver',
+                team_id='tea_team', team='Test Team',
+            )],
+            source='https://api.jolpi.ca/ergast/f1/2026/driverstandings/',
+            updated_at=datetime.now(timezone.utc),
+        )
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.dict('os.environ', {'DATABASE_PATH': f'{directory}/cache.db'}), \
+                TestClient(app) as client:
+            with patch.object(app.state.schedules, 'season', return_value=RaceFeed(
+                races=[normalize(sample())], updated_at=datetime.now(timezone.utc),
+            )), patch.object(app.state.results, 'roster', return_value=roster):
+                response = client.get('/api/v1/seasons/2026/roster')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['entries'][0]['driver_id'], 'drv_driver')
+
     def test_season_summaries_are_batched_and_cached(self):
         driver = {'driverId': 'driver', 'givenName': 'Test', 'familyName': 'Winner'}
         result = {

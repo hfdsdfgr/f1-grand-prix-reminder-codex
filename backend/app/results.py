@@ -11,7 +11,7 @@ from app.data_schema import (
     PROVIDER_ID, connect, migrate, new_id, record_provider_health, store_raw,
 )
 from app.models import RaceSummary
-from app.providers.jolpica import BASE_URL
+from app.providers.jolpica import BASE_URL, fetch_driver_standings
 
 
 class Result(BaseModel):
@@ -79,6 +79,21 @@ class SeasonSummaryFeed(BaseModel):
     stale: bool = False
     winner_races: list[dict] | None = Field(default=None, exclude=True)
     fastest_races: list[dict] | None = Field(default=None, exclude=True)
+
+
+class SeasonRosterEntry(BaseModel):
+    driver_id: str
+    driver: str
+    team_id: str
+    team: str
+
+
+class SeasonRosterFeed(BaseModel):
+    entries: list[SeasonRosterEntry]
+    source: HttpUrl
+    updated_at: datetime
+    stale: bool = False
+    raw_rows: list[dict] | None = Field(default=None, exclude=True)
 
 
 def normalize_results(rows: list[dict], source: str, kind: str) -> ResultsFeed:
@@ -192,6 +207,16 @@ def fetch_season_summaries(season: int) -> SeasonSummaryFeed:
     return SeasonSummaryFeed(
         summaries=summaries, updated_at=datetime.now(timezone.utc),
         winner_races=winner_races, fastest_races=fastest_races,
+    )
+
+
+def normalize_roster(rows: list[dict], season: int) -> SeasonRosterFeed:
+    """Keep only driver/team pairs explicitly published in season standings."""
+    return SeasonRosterFeed(
+        entries=[],
+        source=f'{BASE_URL}/{season}/driverstandings/',
+        updated_at=datetime.now(timezone.utc),
+        raw_rows=rows,
     )
 
 
@@ -525,6 +550,115 @@ class ResultsRepository:
             db.execute('INSERT OR REPLACE INTO season_summary_cache VALUES (?,?)',
                        (season, feed.model_dump_json()))
         return feed
+
+    def roster(self, season: int) -> SeasonRosterFeed:
+        with closing(connect(self.path)) as db:
+            row = db.execute(
+                'SELECT payload FROM season_roster_cache WHERE season=?', (season,),
+            ).fetchone()
+        cached = SeasonRosterFeed.model_validate_json(row[0]) if row else None
+        now = datetime.now(timezone.utc)
+        ttl = 900 if season >= now.year else 30 * 86400
+        if cached and (now - cached.updated_at).total_seconds() < ttl:
+            return cached
+        try:
+            feed = normalize_roster(fetch_driver_standings(season), season)
+        except Exception as exc:
+            record_provider_health(
+                self.path, False,
+                schema_changed=isinstance(exc, (KeyError, TypeError, ValueError)),
+            )
+            if cached:
+                return cached.model_copy(update={'stale': True})
+            raise
+        record_provider_health(self.path, True)
+        hydrated = self._persist_roster(season, feed)
+        with closing(connect(self.path)) as db, db:
+            db.execute('INSERT OR REPLACE INTO season_roster_cache VALUES (?,?)',
+                       (season, hydrated.model_dump_json()))
+        return hydrated
+
+    def _persist_roster(self, season: int, feed: SeasonRosterFeed) -> SeasonRosterFeed:
+        """Persist provider identities so roster and results share stable local IDs."""
+        now = datetime.now(timezone.utc).isoformat()
+        entries = []
+        with closing(connect(self.path)) as db, db:
+            season_row = db.execute('SELECT season_id FROM seasons WHERE year=?', (season,)).fetchone()
+            if not season_row:
+                return feed
+            season_id = season_row[0]
+            if feed.raw_rows is not None:
+                store_raw(db, f'season-roster:{season}', feed.raw_rows)
+            for row in feed.raw_rows or []:
+                driver = row.get('Driver') or {}
+                teams = row.get('Constructors') or []
+                team = teams[0] if teams else {}
+                driver_external_id = driver.get('driverId')
+                team_external_id = team.get('constructorId')
+                given_name, family_name = driver.get('givenName'), driver.get('familyName')
+                driver_name = ' '.join(part for part in (given_name, family_name) if part)
+                team_name = team.get('name')
+                if not (driver_external_id and team_external_id and driver_name and team_name):
+                    continue
+                driver_row = db.execute('''SELECT driver_id FROM driver_external_identities
+                    WHERE provider_id=? AND external_id=?''',
+                    (PROVIDER_ID, driver_external_id)).fetchone()
+                driver_id = driver_row[0] if driver_row else new_id('drv')
+                team_row = db.execute('''SELECT team_id FROM team_external_identities
+                    WHERE provider_id=? AND external_id=?''',
+                    (PROVIDER_ID, team_external_id)).fetchone()
+                team_id = team_row[0] if team_row else new_id('tea')
+                db.execute('''INSERT INTO drivers
+                    (driver_id,full_name,given_name,family_name,nationality,date_of_birth,
+                     permanent_number,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(driver_id) DO UPDATE SET full_name=excluded.full_name,
+                    given_name=COALESCE(excluded.given_name,drivers.given_name),
+                    family_name=COALESCE(excluded.family_name,drivers.family_name),
+                    nationality=COALESCE(excluded.nationality,drivers.nationality),
+                    date_of_birth=COALESCE(excluded.date_of_birth,drivers.date_of_birth),
+                    permanent_number=COALESCE(excluded.permanent_number,drivers.permanent_number),
+                    status='active',updated_at=excluded.updated_at''',
+                    (driver_id, driver_name, given_name, family_name, driver.get('nationality'),
+                     driver.get('dateOfBirth'), driver.get('permanentNumber'), 'active', now, now))
+                db.execute('''INSERT INTO teams (team_id,canonical_name,status,created_at,updated_at)
+                    VALUES (?,?,?,?,?) ON CONFLICT(team_id) DO UPDATE SET
+                    canonical_name=excluded.canonical_name,status='active',updated_at=excluded.updated_at''',
+                    (team_id, team_name, 'active', now, now))
+                db.execute('''INSERT INTO driver_external_identities
+                    (provider_id,external_id,driver_id,external_name,first_seen_at,last_seen_at,
+                     last_verified_at,confidence,status) VALUES (?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(provider_id,external_id) DO UPDATE SET driver_id=excluded.driver_id,
+                    external_name=excluded.external_name,last_seen_at=excluded.last_seen_at,
+                    last_verified_at=excluded.last_verified_at,status='active' ''',
+                    (PROVIDER_ID, driver_external_id, driver_id, driver_name, now, now, now, 'high', 'active'))
+                db.execute('''INSERT INTO team_external_identities
+                    (provider_id,external_id,team_id,external_name,first_seen_at,last_seen_at,
+                     last_verified_at,confidence,status) VALUES (?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(provider_id,external_id) DO UPDATE SET team_id=excluded.team_id,
+                    external_name=excluded.external_name,last_seen_at=excluded.last_seen_at,
+                    last_verified_at=excluded.last_verified_at,status='active' ''',
+                    (PROVIDER_ID, team_external_id, team_id, team_name, now, now, now, 'high', 'active'))
+                team_season = db.execute('''SELECT team_season_id FROM team_seasons
+                    WHERE team_id=? AND season_id=?''', (team_id, season_id)).fetchone()
+                db.execute('''INSERT INTO team_seasons
+                    (team_season_id,team_id,season_id,display_name,status) VALUES (?,?,?,?,?)
+                    ON CONFLICT(team_id,season_id) DO UPDATE SET display_name=excluded.display_name,
+                    status='active' ''',
+                    ((team_season[0] if team_season else new_id('tse')), team_id, season_id, team_name, 'active'))
+                assignment = db.execute('''SELECT assignment_id FROM driver_team_assignments
+                    WHERE driver_id=? AND team_id=? AND season_id=?
+                    AND race_from IS NULL AND race_to IS NULL''',
+                    (driver_id, team_id, season_id)).fetchone()
+                if not assignment:
+                    db.execute('''INSERT INTO driver_team_assignments
+                        (assignment_id,driver_id,team_id,season_id,car_number,role,
+                         race_from,race_to,status) VALUES (?,?,?,?,?,?,?,?,?)''',
+                        (new_id('asg'), driver_id, team_id, season_id,
+                         driver.get('permanentNumber'), None, None, None, 'confirmed'))
+                entries.append(SeasonRosterEntry(
+                    driver_id=driver_id, driver=driver_name, team_id=team_id, team=team_name,
+                ))
+        return feed.model_copy(update={'entries': entries})
 
     def load(self, season: int, round_number: int, kind: str) -> ResultsFeed:
         if kind not in ('results', 'qualifying'):
