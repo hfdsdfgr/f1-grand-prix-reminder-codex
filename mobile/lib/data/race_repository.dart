@@ -214,6 +214,49 @@ class RaceRepository {
     if (cached) body['stale'] = true;
     return SeasonRosterFeed(body);
   }
+
+  Future<EvolutionFeed> evolution(int season) async {
+    final (json, cached) = await _get(
+      '/api/v1/evolution?season=$season',
+      const Duration(seconds: 20),
+    );
+    return EvolutionFeed(
+      Map<String, dynamic>.from(json as Map),
+      cached: cached,
+    );
+  }
+}
+
+class UpgradeEntry {
+  final String id, teamId, team, component, title, status, confidence;
+  final String? raceId, race, change, goal, expectedEffect;
+  final List<BriefingSource> sources;
+  UpgradeEntry(Map<String, dynamic> json)
+    : id = json['id'] as String,
+      teamId = json['team_id'] as String,
+      team = json['team'] as String,
+      component = json['component'] as String,
+      title = json['title'] as String,
+      status = json['status'] as String,
+      confidence = json['confidence'] as String,
+      raceId = json['race_id'] as String?,
+      race = json['race'] as String?,
+      change = json['change'] as String?,
+      goal = json['goal'] as String?,
+      expectedEffect = json['expected_effect'] as String?,
+      sources = (json['sources'] as List)
+          .map((s) => BriefingSource(s as Map<String, dynamic>))
+          .toList();
+}
+
+class EvolutionFeed {
+  final List<UpgradeEntry> upgrades;
+  final bool stale;
+  EvolutionFeed(Map<String, dynamic> json, {bool cached = false})
+    : upgrades = (json['upgrades'] as List)
+          .map((u) => UpgradeEntry(u as Map<String, dynamic>))
+          .toList(),
+      stale = cached || (json['stale'] as bool? ?? false);
 }
 
 class SeasonRosterEntry {

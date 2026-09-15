@@ -10,6 +10,7 @@ from app.models import (
     NextRace, ProviderHealthRead, RaceFeed, Race, ScheduleRevisionRead,
 )
 from app.lifecycle import with_lifecycle
+from app.evolution import EvolutionFeed, load_evolution
 from app.results import (
     ChampionshipImpact, ResultsRepository, ResultsFeed, RaceStory, SeasonRosterFeed,
     StrategyFeed, RaceBriefing, build_race_story,
@@ -35,6 +36,14 @@ app.add_middleware(
 @app.get('/health')
 def health():
     return {'status': 'ok'}
+
+
+@app.get('/api/v1/evolution', response_model=EvolutionFeed)
+def evolution(season: int = Query(ge=1950, le=2100)):
+    try:
+        return load_evolution(app.state.schedules.path, season)
+    except Exception as exc:
+        raise HTTPException(503, 'Upgrade archive is temporarily unavailable.') from exc
 
 
 def schedule(season: int) -> RaceFeed:

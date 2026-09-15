@@ -285,6 +285,13 @@ CREATE TABLE IF NOT EXISTS specification_upgrades (
     upgrade_id TEXT NOT NULL REFERENCES upgrades(upgrade_id),
     status TEXT NOT NULL DEFAULT 'installed', PRIMARY KEY(specification_id, upgrade_id)
 );
+CREATE TABLE IF NOT EXISTS upgrade_sources (
+    source_id TEXT PRIMARY KEY,
+    upgrade_id TEXT NOT NULL REFERENCES upgrades(upgrade_id),
+    provider TEXT NOT NULL, url TEXT NOT NULL, published_at TEXT,
+    retrieved_at TEXT NOT NULL, original_text TEXT NOT NULL,
+    UNIQUE(upgrade_id, url)
+);
 CREATE TABLE IF NOT EXISTS upgrade_lifecycle_events (
     event_id TEXT PRIMARY KEY, upgrade_id TEXT NOT NULL REFERENCES upgrades(upgrade_id),
     race_id TEXT REFERENCES races(race_id), session_id TEXT REFERENCES sessions(session_id),
@@ -433,6 +440,7 @@ def migrate(path: str) -> None:
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (6, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (7, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (8, ?)', (now,))
+        db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (9, ?)', (now,))
         db.execute('PRAGMA foreign_keys = ON')
 
 

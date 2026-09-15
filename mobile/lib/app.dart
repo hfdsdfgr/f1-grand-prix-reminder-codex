@@ -12,6 +12,7 @@ import 'data/race_repository.dart';
 import 'data/reminder_service.dart';
 import 'features/home/home_page.dart';
 import 'features/briefing/briefing_page.dart';
+import 'features/evolution/evolution_page.dart';
 import 'features/races/races_page.dart';
 import 'features/settings/settings_page.dart';
 
@@ -185,11 +186,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
                   follows: _follows,
                 ),
                 2 => BriefingPage(repository: _repository),
-                _ => const PlannedPage(
-                  title: 'Evolution',
-                  description: 'Follow what changes on the cars.',
-                  detail: 'Verified upgrade timelines come first. Interactive car models follow.',
-                ),
+                _ => EvolutionPage(repository: _repository),
               },
             ),
           ),
