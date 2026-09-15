@@ -14,7 +14,7 @@ from app.results import (
     ChampionshipImpact, ChampionshipStanding, ResultsRepository, build_race_story,
     fetch_season_summaries, normalize_championship, normalize_results,
     SeasonRosterEntry, SeasonRosterFeed, StrategyFeed, StrategyStint, DriverStrategy,
-    normalize_strategy,
+    RaceBriefing, BriefingInsight, BriefingSource, normalize_strategy,
 )
 from app.repositories.schedules import ScheduleRepository
 from test_schedules import sample
@@ -26,6 +26,58 @@ def row(**overrides):
 
 
 class ResultsTests(unittest.TestCase):
+    def test_briefing_exposes_stored_insights_only_with_original_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/data.db'
+            ScheduleRepository(path)._persist(RaceFeed(
+                races=[normalize(sample())], updated_at=datetime.now(timezone.utc),
+            ))
+            repo = ResultsRepository(path)
+            with closing(sqlite3.connect(path)) as db, db:
+                race_id = db.execute('SELECT race_id FROM races').fetchone()[0]
+                db.execute('''INSERT INTO interviews VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', (
+                    'int_1', race_id, None, None, None, 'Test press',
+                    'https://example.com/interview', '2026-03-01T12:00:00+00:00',
+                    '2026-03-01T13:00:00+00:00', 'Original words', 'stored', 'hash',
+                ))
+                db.execute('''INSERT INTO source_snapshots VALUES (?,?,?,?)''', (
+                    'snap_1', '2026-03-01T13:00:00+00:00', 'snapshot-hash', 1,
+                ))
+                db.execute('''INSERT INTO source_snapshot_items VALUES (?,?,?,?)''', (
+                    'snap_1', 'interview', 'int_1', 'hash',
+                ))
+                db.execute('''INSERT INTO ai_generations VALUES (?,?,?,?,?,?,?,?)''', (
+                    'gen_1', 'test', 'test', 'v1', 'v1', '2026-03-01T13:00:00+00:00',
+                    'snap_1', 'stored',
+                ))
+                db.execute('''INSERT INTO race_briefs VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (
+                    'brief_1', race_id, 'High-speed balance improved.', None, None,
+                    None, None, None, None, 'stored', 'gen_1',
+                ))
+            briefing = repo.briefing(2026, 1)
+            self.assertEqual(briefing.insights[0].topic, 'Technical themes')
+            self.assertEqual(str(briefing.sources[0].url), 'https://example.com/interview')
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute('DELETE FROM interviews')
+            self.assertEqual(repo.briefing(2026, 1).insights, [])
+
+    def test_briefing_endpoint_returns_source_backed_content(self):
+        briefing = RaceBriefing(
+            race_id='2026-1', insights=[BriefingInsight(
+                topic='Technical themes', detail='High-speed balance improved.',
+            )], sources=[BriefingSource(url='https://example.com/interview')],
+            updated_at=datetime.now(timezone.utc),
+        )
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.dict('os.environ', {'DATABASE_PATH': f'{directory}/cache.db'}), \
+                TestClient(app) as client:
+            with patch.object(app.state.schedules, 'season', return_value=RaceFeed(
+                races=[normalize(sample())], updated_at=datetime.now(timezone.utc),
+            )), patch.object(app.state.results, 'briefing', return_value=briefing):
+                response = client.get('/api/v1/races/2026-1/briefing')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['sources'][0]['url'], 'https://example.com/interview')
+
     def test_championship_impact_compares_previous_round_and_caches(self):
         previous_drivers = [
             {'position': '1', 'points': '25', 'Driver': {

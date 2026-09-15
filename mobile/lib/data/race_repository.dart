@@ -199,6 +199,14 @@ class RaceRepository {
     return ChampionshipImpactFeed(body);
   }
 
+  Future<RaceBriefingFeed> briefing(String raceId) async {
+    final path = '/api/v1/races/${Uri.encodeComponent(raceId)}/briefing';
+    final (json, cached) = await _get(path, const Duration(seconds: 20));
+    final body = Map<String, dynamic>.from(json as Map);
+    if (cached) body['stale'] = true;
+    return RaceBriefingFeed(body);
+  }
+
   Future<SeasonRosterFeed> roster(int season) async {
     final path = '/api/v1/seasons/$season/roster';
     final (json, cached) = await _get(path, const Duration(seconds: 20));
@@ -369,4 +377,41 @@ class ChampionshipImpactFeed {
       sources = (json['sources'] as List).cast<String>(),
       updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
       stale = json['stale'] as bool;
+}
+
+class BriefingInsight {
+  final String topic, detail;
+  BriefingInsight(Map<String, dynamic> json)
+    : topic = json['topic'] as String,
+      detail = json['detail'] as String;
+}
+
+class BriefingSource {
+  final String url;
+  final String? provider;
+  final DateTime? publishedAt;
+  BriefingSource(Map<String, dynamic> json)
+    : url = json['url'] as String,
+      provider = json['provider'] as String?,
+      publishedAt = json['published_at'] == null
+          ? null
+          : DateTime.parse(json['published_at'] as String).toLocal();
+}
+
+class RaceBriefingFeed {
+  final String raceId;
+  final List<BriefingInsight> insights;
+  final List<BriefingSource> sources;
+  final DateTime updatedAt;
+  final bool stale;
+  RaceBriefingFeed(Map<String, dynamic> json)
+    : raceId = json['race_id'] as String,
+      insights = (json['insights'] as List)
+          .map((item) => BriefingInsight(item as Map<String, dynamic>))
+          .toList(),
+      sources = (json['sources'] as List)
+          .map((item) => BriefingSource(item as Map<String, dynamic>))
+          .toList(),
+      updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
+      stale = json['stale'] as bool? ?? false;
 }

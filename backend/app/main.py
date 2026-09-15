@@ -12,7 +12,7 @@ from app.models import (
 from app.lifecycle import with_lifecycle
 from app.results import (
     ChampionshipImpact, ResultsRepository, ResultsFeed, RaceStory, SeasonRosterFeed,
-    StrategyFeed, build_race_story,
+    StrategyFeed, RaceBriefing, build_race_story,
 )
 from app.repositories.schedules import ScheduleRepository
 
@@ -163,3 +163,12 @@ def championship_impact(race_id: RaceId):
         return app.state.results.championship_impact(race.season, race.round)
     except Exception as exc:
         raise HTTPException(503, 'Championship impact is temporarily unavailable. Please retry.') from exc
+
+
+@app.get('/api/v1/races/{race_id}/briefing', response_model=RaceBriefing)
+def race_briefing(race_id: RaceId):
+    race = race_detail(race_id)
+    try:
+        return app.state.results.briefing(race.season, race.round)
+    except Exception as exc:
+        raise HTTPException(503, 'Race briefing is temporarily unavailable. Please retry.') from exc

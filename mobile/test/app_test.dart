@@ -182,7 +182,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('赛后简报').last);
       await tester.pumpAndSettle();
-      expect(find.text('即将推出'), findsOneWidget);
+      expect(find.text('暂无已结束的比赛可供查看赛后简报。'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

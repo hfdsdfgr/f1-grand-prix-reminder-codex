@@ -134,6 +134,25 @@ class ChampionshipImpact(BaseModel):
     stale: bool = False
 
 
+class BriefingInsight(BaseModel):
+    topic: str
+    detail: str
+
+
+class BriefingSource(BaseModel):
+    provider: str | None = None
+    url: HttpUrl
+    published_at: datetime | None = None
+
+
+class RaceBriefing(BaseModel):
+    race_id: str
+    insights: list[BriefingInsight]
+    sources: list[BriefingSource]
+    updated_at: datetime
+    stale: bool = False
+
+
 def normalize_results(rows: list[dict], source: str, kind: str) -> ResultsFeed:
     entries = []
     fastest = None
@@ -724,6 +743,58 @@ class ResultsRepository:
             db.execute('INSERT OR REPLACE INTO championship_impact_cache VALUES (?,?)',
                        (key, feed.model_dump_json()))
         return feed
+
+    def briefing(self, season: int, round_number: int) -> RaceBriefing:
+        """Return only source-backed, stored briefing output; this never invents a recap."""
+        with closing(connect(self.path)) as db:
+            race = db.execute('''SELECT r.race_id FROM races r
+                JOIN seasons s ON s.season_id=r.season_id
+                WHERE s.year=? AND r.round=?''', (season, round_number)).fetchone()
+            if not race:
+                return RaceBriefing(
+                    race_id=f'{season}-{round_number}', insights=[], sources=[],
+                    updated_at=datetime.now(timezone.utc),
+                )
+            race_id = race[0]
+            brief = db.execute('''SELECT b.technical_themes,b.team_performance,b.tyre_issues,
+                b.strategy_issues,b.upgrade_feedback,b.driver_concerns,b.next_race_expectations,
+                g.source_snapshot_id,g.generated_at
+                FROM race_briefs b JOIN ai_generations g ON g.generation_id=b.generation_id
+                WHERE b.race_id=? ORDER BY g.generated_at DESC, b.rowid DESC LIMIT 1''',
+                (race_id,)).fetchone()
+            source_rows = [] if not brief else list(db.execute('''SELECT i.source_provider,
+                i.source_url,i.published_at,i.retrieved_at FROM interviews i
+                JOIN source_snapshot_items item ON item.entity_id=i.interview_id
+                WHERE item.snapshot_id=? AND item.entity_type='interview' AND i.source_url IS NOT NULL
+                UNION ALL SELECT s.provider,s.url,s.published_at,i.retrieved_at
+                FROM interview_sources s JOIN interviews i ON i.interview_id=s.interview_id
+                JOIN source_snapshot_items item ON item.entity_id=i.interview_id
+                WHERE item.snapshot_id=? AND item.entity_type='interview' ''',
+                (brief[7], brief[7])))
+        sources, seen = [], set()
+        updated_at = None
+        for provider, url, published_at, retrieved_at in source_rows:
+            if not isinstance(url, str) or not url.startswith(('https://', 'http://')) or url in seen:
+                continue
+            seen.add(url)
+            sources.append(BriefingSource(provider=provider, url=url, published_at=published_at))
+            if retrieved_at:
+                try:
+                    retrieved = datetime.fromisoformat(retrieved_at.replace('Z', '+00:00'))
+                    updated_at = max(updated_at, retrieved) if updated_at else retrieved
+                except ValueError:
+                    pass
+        fields = (
+            ('Technical themes', 0), ('Team performance', 1), ('Tyre issues', 2),
+            ('Strategy issues', 3), ('Upgrade feedback', 4), ('Driver concerns', 5),
+            ('Next-race expectations', 6),
+        )
+        insights = [BriefingInsight(topic=topic, detail=brief[index]) for topic, index in fields
+                    if brief and brief[index] and sources]
+        return RaceBriefing(
+            race_id=f'{season}-{round_number}', insights=insights, sources=sources,
+            updated_at=updated_at or datetime.now(timezone.utc),
+        )
 
     def _persist_roster(self, season: int, feed: SeasonRosterFeed) -> SeasonRosterFeed:
         """Persist provider identities so roster and results share stable local IDs."""

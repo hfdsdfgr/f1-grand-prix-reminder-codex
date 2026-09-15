@@ -6,6 +6,7 @@ import '../../data/race_repository.dart';
 import '../../data/follow_service.dart';
 import '../../data/reminder_service.dart';
 import '../../shared/race_feed_view.dart';
+import '../../shared/race_briefing_view.dart';
 import '../../shared/follow_context.dart';
 import '../home/home_page.dart';
 import '../home/reminder_controls.dart';
@@ -339,6 +340,11 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                   saved: _savedImpact,
                   onSaved: (impact) => _savedImpact = impact,
                   onRetry: _refreshImpact,
+                ),
+                const SizedBox(height: 32),
+                RaceBriefingView(
+                  repository: widget.repository,
+                  raceId: widget.race.id,
                 ),
               ],
               Text(

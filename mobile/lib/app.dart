@@ -11,6 +11,7 @@ import 'data/follow_service.dart';
 import 'data/race_repository.dart';
 import 'data/reminder_service.dart';
 import 'features/home/home_page.dart';
+import 'features/briefing/briefing_page.dart';
 import 'features/races/races_page.dart';
 import 'features/settings/settings_page.dart';
 
@@ -183,11 +184,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
                   onRevealSession: _revealSession,
                   follows: _follows,
                 ),
-                2 => const PlannedPage(
-                  title: 'Briefing',
-                  description: 'Driver insights, with the original sources.',
-                  detail: 'Interview summaries will arrive after the race database is ready.',
-                ),
+                2 => BriefingPage(repository: _repository),
                 _ => const PlannedPage(
                   title: 'Evolution',
                   description: 'Follow what changes on the cars.',
