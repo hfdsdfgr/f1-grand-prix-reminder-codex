@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GrandPrixReminder · 赛车交互调试</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#fafafa;color:#202124;font:15px/1.6 system-ui,sans-serif}main{max-width:1400px;margin:auto;padding:28px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #dadce0;padding-bottom:20px}h1{font-size:24px;margin:0}p{color:#5f6368;margin:6px 0}button,select,input{font:inherit}button,select{min-height:44px;border:1px solid #dadce0;background:white;border-radius:5px;padding:8px 12px;color:inherit}button{cursor:pointer}button:hover{background:#f1f2f3}button:focus-visible,select:focus-visible,canvas:focus-visible{outline:3px solid #b42318;outline-offset:3px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:32px;padding-top:24px}.stage{position:relative;background:#fff;border-bottom:1px solid #dadce0}canvas{width:100%;height:580px;display:block;touch-action:none;cursor:grab}canvas:active{cursor:grabbing}.tag{position:absolute;top:16px;left:18px;color:#5f6368;pointer-events:none;font-size:13px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:16px 0}aside section{padding-bottom:22px;margin-bottom:20px;border-bottom:1px solid #dadce0}h2{font-size:16px;margin:0 0 12px}label{display:block;margin:12px 0 4px}select,input[type=range]{width:100%}input{accent-color:#b42318}output{float:right;font-variant-numeric:tabular-nums}.check{display:flex;align-items:center;gap:10px}.check input{width:18px;height:18px}#selected{color:#b42318}textarea{width:100%;height:115px;border:1px solid #dadce0;padding:8px;resize:vertical;font:12px/1.5 monospace}small{color:#5f6368} @media(max-width:800px){main{padding:16px}.layout{grid-template-columns:1fr;gap:16px}canvas{height:420px}header{display:block}aside{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px}}
+</style>
+<main>
+  <header><div><h1>赛车交互调试</h1><p>GrandPrixReminder · 通用低精度模型</p></div><small>独立 HTML · 无网络依赖</small></header>
+  <div class="layout"><div>
+    <div class="stage"><span class="tag">拖动旋转 / 滚轮或双指缩放 / 点击部件</span><canvas id="car" tabindex="0" aria-label="交互赛车模型：方向键旋转，加减号缩放，右侧菜单选择部件"></canvas></div>
+    <div class="toolbar"><button data-view="default">重置视角</button><button data-view="front">正面</button><button data-view="side">侧面</button><button data-view="top">俯视</button><button data-view="rear">后方</button></div>
+    <p id="status" aria-live="polite">已选择：前翼</p><small>使用与当前 Flutter 版本相同的方块几何，方便先调整旋转手感和部件交互。模型不代表真实车队规格。</small>
+  </div><aside>
+    <section><h2>部件 · <span id="selected">前翼</span></h2><select id="part" aria-label="选择赛车部件"></select><label class="check"><input id="focus" type="checkbox">单独查看选中部件</label><label class="check"><input id="wire" type="checkbox">线框模式</label><label class="check"><input id="labels" type="checkbox" checked>显示连线标注</label></section>
+    <section><h2>视角与手感</h2><label for="yaw">水平角度<output id="yawOut"></output></label><input id="yaw" type="range" min="-180" max="180" step="1"><label for="pitch">俯仰角度<output id="pitchOut"></output></label><input id="pitch" type="range" min="-80" max="89" step="1"><label for="zoom">缩放<output id="zoomOut"></output></label><input id="zoom" type="range" min="0.5" max="3" step="0.05"><label for="speed">旋转灵敏度<output id="speedOut"></output></label><input id="speed" type="range" min="0.2" max="2" step="0.1" value="1"></section>
+    <section><h2>记录调试参数</h2><button id="export">生成参数</button><p><small>复制下面的参数发给我，即可按这个视角继续调整。</small></p><textarea id="settings" readonly aria-label="当前调试参数"></textarea></section>
+  </aside></div>
+</main>
+<script>
+'use strict';
+const parts = [
+ ['前翼',0,.18,-2.35,2,.12,.45],['鼻锥',0,.42,-1.5,.35,.3,1.35],
+ ['前悬架',0,.4,-1.35,1.65,.08,.25],['前轮',-.95,.42,-1.35,.42,.8,.75],['前轮',.95,.42,-1.35,.42,.8,.75],
+ ['侧箱',-.48,.48,.2,.5,.4,1.45],['侧箱',.48,.48,.2,.5,.4,1.45],['底板',0,.16,.25,1.65,.08,2.55],
+ ['引擎盖',0,.75,.7,.42,.6,1.2],['动力单元',0,.42,.9,.5,.35,.65],['后悬架',0,.4,1.55,1.65,.08,.25],
+ ['后轮',-.95,.45,1.55,.5,.85,.85],['后轮',.95,.45,1.55,.5,.85,.85],['梁翼',0,.5,2,1.25,.1,.3],['尾翼',0,1.1,2,1.6,.16,.5]
+];
+const $ = id => document.getElementById(id), canvas=$('car'), ctx=canvas.getContext('2d');
+const state={yaw:-.65,pitch:.55,zoom:1,speed:1,part:'前翼',focus:false,wire:false,labels:true};
+let width=1,height=1,faces=[];
+const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+const wrap=v=>Math.atan2(Math.sin(v),Math.cos(v));
+for(const name of new Set(parts.map(p=>p[0]))) $('part').add(new Option(name,name));
+function project(x,y,z){
+ const p=parts.find(p=>p[0]===state.part);
+ y-=state.focus?p[2]:.45;if(state.focus)z-=p[3];
+ const rx=x*Math.cos(state.yaw)+z*Math.sin(state.yaw),rz=z*Math.cos(state.yaw)-x*Math.sin(state.yaw);
+ const ry=y*Math.cos(state.pitch)-rz*Math.sin(state.pitch),depth=y*Math.sin(state.pitch)+rz*Math.cos(state.pitch);
+ const scale=Math.min(width/6,height/5)*state.zoom;
+ return {x:width/2+rx*scale,y:height/2-ry*scale,depth};
+}
+function draw(){
+ ctx.clearRect(0,0,width,height);faces=[];
+ for(const p of parts){
+  if(state.focus&&p[0]!==state.part)continue;
+  const pts=[];
+  for(const z of [-1,1])for(const y of [-1,1])for(const x of [-1,1])pts.push(project(p[1]+x*p[4]/2,p[2]+y*p[5]/2,p[3]+z*p[6]/2));
+  [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]].forEach((ids,side)=>{
+   const path=new Path2D();ids.forEach((i,j)=>j?path.lineTo(pts[i].x,pts[i].y):path.moveTo(pts[i].x,pts[i].y));path.closePath();
+   faces.push({path,side,name:p[0],depth:ids.reduce((s,i)=>s+pts[i].depth,0)/4});
+  });
+ }
+ faces.sort((a,b)=>a.depth-b.depth);
+ for(const f of faces){
+  const selected=f.name===state.part,tyre=f.name.endsWith('轮');
+  ctx.fillStyle=selected?`hsl(5 65% ${43-f.side*2}%)`:tyre?`hsl(210 5% ${28-f.side}%)`:`hsl(210 8% ${85-f.side*3}%)`;
+  if(!state.wire)ctx.fill(f.path);
+  ctx.strokeStyle=selected?'#8c1c13':'#6c747c';ctx.lineWidth=state.wire?1:.7;ctx.stroke(f.path);
+ }
+ if(state.labels){
+  const p=parts.find(p=>p[0]===state.part),a=project(p[1],p[2],p[3]);
+  ctx.strokeStyle='#b42318';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(28,height-35);ctx.stroke();
+  ctx.fillStyle='#b42318';ctx.beginPath();ctx.arc(a.x,a.y,3,0,Math.PI*2);ctx.fill();
+  ctx.font='15px system-ui';ctx.fillStyle='white';ctx.fillRect(20,height-51,ctx.measureText(state.part).width+16,29);ctx.fillStyle='#b42318';ctx.fillText(state.part,28,height-31);
+ }
+ for(const k of ['yaw','pitch','zoom','speed']){
+  const degrees=k==='yaw'||k==='pitch',value=degrees?state[k]*180/Math.PI:state[k];
+  $(k).value=value;$(k+'Out').value=degrees?Math.round(value)+'°':value.toFixed(2)+'×';
+ }
+ $('selected').textContent=state.part;$('part').value=state.part;
+ $('status').textContent='已选择：'+state.part+(state.part==='动力单元'?' · 内部部件可使用“单独查看”':'');
+}
+new ResizeObserver(()=>{
+ const r=canvas.getBoundingClientRect();width=r.width;height=r.height;const dpr=Math.min(devicePixelRatio||1,2);
+ canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);draw();
+}).observe(canvas);
+const pointers=new Map();let start=null,moved=false,pinched=false;
+const distance=()=>{const p=[...pointers.values()];return p.length===2?Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y):0};
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);canvas.focus({preventScroll:true});if(!pointers.size){start={x:e.clientX,y:e.clientY};moved=false;pinched=false;}pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size>1)pinched=true;});
+canvas.addEventListener('pointermove',e=>{
+ const old=pointers.get(e.pointerId);if(!old)return;
+ const prevDistance=distance();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>4)moved=true;
+ if(pointers.size===2){const next=distance();if(prevDistance>0)state.zoom=clamp(state.zoom*next/prevDistance,.5,3);}
+ else if(pointers.size===1){state.yaw=wrap(state.yaw+(e.clientX-old.x)*.01*state.speed);state.pitch=clamp(state.pitch+(e.clientY-old.y)*.01*state.speed,-80*Math.PI/180,89*Math.PI/180);}
+ draw();
+});
+canvas.addEventListener('pointerup',e=>{
+ if(!moved&&!pinched&&pointers.size===1){const r=canvas.getBoundingClientRect();ctx.save();ctx.setTransform(1,0,0,1,0,0);const hit=[...faces].reverse().find(f=>ctx.isPointInPath(f.path,e.clientX-r.left,e.clientY-r.top));ctx.restore();if(hit)state.part=hit.name;}
+ pointers.delete(e.pointerId);draw();
+});
+for(const name of ['pointercancel','lostpointercapture'])canvas.addEventListener(name,e=>pointers.delete(e.pointerId));
+canvas.addEventListener('wheel',e=>{e.preventDefault();state.zoom=clamp(state.zoom*Math.exp(-e.deltaY*.001),.5,3);draw();},{passive:false});
+canvas.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-'].includes(e.key))return;e.preventDefault();if(e.key==='ArrowLeft')state.yaw=wrap(state.yaw-.1);if(e.key==='ArrowRight')state.yaw=wrap(state.yaw+.1);if(e.key==='ArrowUp')state.pitch=clamp(state.pitch+.1,-1.39,1.55);if(e.key==='ArrowDown')state.pitch=clamp(state.pitch-.1,-1.39,1.55);if(['+','='].includes(e.key))state.zoom=clamp(state.zoom+.1,.5,3);if(e.key==='-')state.zoom=clamp(state.zoom-.1,.5,3);draw();});
+for(const k of ['yaw','pitch','zoom','speed'])$(k).addEventListener('input',()=>{state[k]=Number($(k).value)*(k==='yaw'||k==='pitch'?Math.PI/180:1);draw();});
+for(const k of ['focus','wire','labels'])$(k).addEventListener('change',()=>{state[k]=$(k).checked;draw();});
+$('part').addEventListener('change',()=>{state.part=$('part').value;draw();});
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{const views={default:[-.65,.55],front:[Math.PI,.12],rear:[0,.12],side:[Math.PI/2,.12],top:[0,Math.PI/2-.01]};[state.yaw,state.pitch]=views[b.dataset.view];state.zoom=1;state.focus=false;$('focus').checked=false;draw();}));
+$('export').addEventListener('click',()=>{$('settings').value=JSON.stringify({...state,yawDegrees:state.yaw*180/Math.PI,pitchDegrees:state.pitch*180/Math.PI},null,2);});
+</script>
+</html>
