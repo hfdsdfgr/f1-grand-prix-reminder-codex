@@ -72,6 +72,17 @@ const _chinese = {
   'Showing saved strategy. It may have changed.': '正在显示已保存的策略数据，内容可能已调整。',
   'Strategy data is not available yet.': '暂无可验证的策略数据。',
   'Source: FastF1': '数据来源：FastF1',
+  'Championship impact': '积分榜影响',
+  'Standings after this race, compared with the previous round.':
+      '本站赛后积分榜，与上一站对比。',
+  'Loading championship impact': '正在加载积分榜影响',
+  'Unable to load championship impact. Please try again.': '无法加载积分榜影响，请重试。',
+  'Showing saved championship impact. It may have changed.':
+      '正在显示已保存的积分榜影响，内容可能已调整。',
+  'Championship data is not available yet.': '暂无可验证的积分榜数据。',
+  'Drivers’ championship': '车手积分榜',
+  'Constructors’ championship': '车队积分榜',
+  'points': '分',
   'Stops': '进站次数',
   'Pit': '进站',
   'Tyre age': '轮胎使用圈数',

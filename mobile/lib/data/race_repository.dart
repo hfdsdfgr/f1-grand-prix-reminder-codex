@@ -190,6 +190,15 @@ class RaceRepository {
     return StrategyFeed(body);
   }
 
+  Future<ChampionshipImpactFeed> championshipImpact(String raceId) async {
+    final path =
+        '/api/v1/races/${Uri.encodeComponent(raceId)}/championship-impact';
+    final (json, cached) = await _get(path, const Duration(seconds: 20));
+    final body = Map<String, dynamic>.from(json as Map);
+    if (cached) body['stale'] = true;
+    return ChampionshipImpactFeed(body);
+  }
+
   Future<SeasonRosterFeed> roster(int season) async {
     final path = '/api/v1/seasons/$season/roster';
     final (json, cached) = await _get(path, const Duration(seconds: 20));
@@ -328,5 +337,36 @@ class StrategyFeed {
           .toList(),
       updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
       source = json['source'] as String,
+      stale = json['stale'] as bool;
+}
+
+class ChampionshipStanding {
+  final String name;
+  final int position;
+  final double points;
+  final int? previousPosition;
+  final double? pointsChange;
+  ChampionshipStanding(Map<String, dynamic> json)
+    : name = json['name'] as String,
+      position = json['position'] as int,
+      points = (json['points'] as num).toDouble(),
+      previousPosition = json['previous_position'] as int?,
+      pointsChange = (json['points_change'] as num?)?.toDouble();
+}
+
+class ChampionshipImpactFeed {
+  final List<ChampionshipStanding> drivers, constructors;
+  final List<String> sources;
+  final DateTime updatedAt;
+  final bool stale;
+  ChampionshipImpactFeed(Map<String, dynamic> json)
+    : drivers = (json['drivers'] as List)
+          .map((entry) => ChampionshipStanding(entry as Map<String, dynamic>))
+          .toList(),
+      constructors = (json['constructors'] as List)
+          .map((entry) => ChampionshipStanding(entry as Map<String, dynamic>))
+          .toList(),
+      sources = (json['sources'] as List).cast<String>(),
+      updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
       stale = json['stale'] as bool;
 }

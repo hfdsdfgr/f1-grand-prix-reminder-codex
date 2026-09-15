@@ -42,6 +42,8 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
   RaceStoryFeed? _savedStory;
   Future<StrategyFeed>? _strategyRequest;
   StrategyFeed? _savedStrategy;
+  Future<ChampionshipImpactFeed>? _impactRequest;
+  ChampionshipImpactFeed? _savedImpact;
 
   Future<ResultsFeed> _load() => _requests.putIfAbsent(
     _qualifying,
@@ -61,6 +63,11 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
       _strategyRequest ??= widget.repository.strategy(widget.race.id);
 
   void _refreshStrategy() => setState(() => _strategyRequest = null);
+
+  Future<ChampionshipImpactFeed> _loadImpact() =>
+      _impactRequest ??= widget.repository.championshipImpact(widget.race.id);
+
+  void _refreshImpact() => setState(() => _impactRequest = null);
 
   @override
   Widget build(BuildContext context) {
@@ -326,6 +333,13 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                   onSaved: (strategy) => _savedStrategy = strategy,
                   onRetry: _refreshStrategy,
                 ),
+                const SizedBox(height: 32),
+                _ChampionshipImpact(
+                  future: _loadImpact(),
+                  saved: _savedImpact,
+                  onSaved: (impact) => _savedImpact = impact,
+                  onRetry: _refreshImpact,
+                ),
               ],
               Text(
                 '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',
@@ -572,6 +586,156 @@ class _DriverStrategy extends StatelessWidget {
     );
   }
 }
+
+class _ChampionshipImpact extends StatelessWidget {
+  final Future<ChampionshipImpactFeed> future;
+  final ChampionshipImpactFeed? saved;
+  final ValueChanged<ChampionshipImpactFeed> onSaved;
+  final VoidCallback onRetry;
+  const _ChampionshipImpact({
+    required this.future,
+    required this.saved,
+    required this.onSaved,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<ChampionshipImpactFeed>(
+    future: future,
+    builder: (context, snapshot) {
+      if (snapshot.hasData) onSaved(snapshot.data!);
+      final impact = snapshot.data ?? saved;
+      if (snapshot.connectionState == ConnectionState.waiting &&
+          impact == null) {
+        return Center(
+          child: CircularProgressIndicator(
+            semanticsLabel: tr(context, 'Loading championship impact'),
+          ),
+        );
+      }
+      if (impact == null) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr(
+                context,
+                'Unable to load championship impact. Please try again.',
+              ),
+            ),
+            TextButton(onPressed: onRetry, child: Text(tr(context, 'Retry'))),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            tr(context, 'Championship impact'),
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            tr(
+              context,
+              'Standings after this race, compared with the previous round.',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (impact.stale || snapshot.hasError)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                tr(
+                  context,
+                  'Showing saved championship impact. It may have changed.',
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          _ChampionshipTable(
+            title: 'Drivers’ championship',
+            entries: impact.drivers,
+          ),
+          const SizedBox(height: 20),
+          _ChampionshipTable(
+            title: 'Constructors’ championship',
+            entries: impact.constructors,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            tr(context, 'Source: Jolpica F1'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (impact.sources.isNotEmpty)
+            SelectableText(
+              impact.sources.first,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class _ChampionshipTable extends StatelessWidget {
+  final String title;
+  final List<ChampionshipStanding> entries;
+  const _ChampionshipTable({required this.title, required this.entries});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(tr(context, title), style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 8),
+      if (entries.isEmpty)
+        Text(tr(context, 'Championship data is not available yet.')),
+      for (final entry in entries.take(3)) _ChampionshipRow(entry: entry),
+    ],
+  );
+}
+
+class _ChampionshipRow extends StatelessWidget {
+  final ChampionshipStanding entry;
+  const _ChampionshipRow({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final change = [
+      if (entry.previousPosition != null)
+        'P${entry.previousPosition} → P${entry.position}',
+      if (entry.pointsChange != null)
+        '${entry.pointsChange! >= 0 ? '+' : ''}${_points(entry.pointsChange!)} ${tr(context, 'points')}',
+    ].join(' · ');
+    return Semantics(
+      container: true,
+      label:
+          'P${entry.position}, ${entry.name}, ${_points(entry.points)} ${tr(context, 'points')}'
+          '${change.isEmpty ? '' : ', $change'}',
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('P${entry.position} · ${entry.name}'),
+              Text(
+                '${_points(entry.points)} ${tr(context, 'points')}'
+                '${change.isEmpty ? '' : ' · $change'}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _points(double value) => value == value.roundToDouble()
+    ? value.toStringAsFixed(0)
+    : value.toStringAsFixed(1);
 
 String _stintText(BuildContext context, StrategyStint stint) => [
   tr(context, stint.compound),

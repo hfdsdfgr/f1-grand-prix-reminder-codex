@@ -11,7 +11,8 @@ from app.models import RaceFeed
 from app.providers.fastf1 import normalize_laps
 from app.providers.jolpica import normalize
 from app.results import (
-    ResultsRepository, build_race_story, fetch_season_summaries, normalize_results,
+    ChampionshipImpact, ChampionshipStanding, ResultsRepository, build_race_story,
+    fetch_season_summaries, normalize_championship, normalize_results,
     SeasonRosterEntry, SeasonRosterFeed, StrategyFeed, StrategyStint, DriverStrategy,
     normalize_strategy,
 )
@@ -25,6 +26,65 @@ def row(**overrides):
 
 
 class ResultsTests(unittest.TestCase):
+    def test_championship_impact_compares_previous_round_and_caches(self):
+        previous_drivers = [
+            {'position': '1', 'points': '25', 'Driver': {
+                'driverId': 'norris', 'givenName': 'Lando', 'familyName': 'Norris',
+            }},
+            {'position': '2', 'points': '18', 'Driver': {
+                'driverId': 'verstappen', 'givenName': 'Max', 'familyName': 'Verstappen',
+            }},
+        ]
+        current_drivers = [
+            {'position': '1', 'points': '43', 'Driver': {
+                'driverId': 'verstappen', 'givenName': 'Max', 'familyName': 'Verstappen',
+            }},
+            {'position': '2', 'points': '40', 'Driver': {
+                'driverId': 'norris', 'givenName': 'Lando', 'familyName': 'Norris',
+            }},
+        ]
+        previous_teams = [{'position': '1', 'points': '43', 'Constructor': {
+            'constructorId': 'mclaren', 'name': 'McLaren',
+        }}]
+        current_teams = [{'position': '1', 'points': '68', 'Constructor': {
+            'constructorId': 'mclaren', 'name': 'McLaren',
+        }}]
+        with tempfile.TemporaryDirectory() as directory:
+            repo = ResultsRepository(f'{directory}/data.db')
+            with patch('app.results.fetch_standings', side_effect=[
+                current_drivers, current_teams, previous_drivers, previous_teams,
+            ]) as fetch:
+                first = repo.championship_impact(2026, 2)
+                second = repo.championship_impact(2026, 2)
+            self.assertEqual(fetch.call_count, 4)
+            self.assertEqual(first.drivers[0].name, 'Max Verstappen')
+            self.assertEqual(first.drivers[0].previous_position, 2)
+            self.assertEqual(first.drivers[0].points_change, 25)
+            self.assertEqual(second.constructors[0].points_change, 25)
+        self.assertEqual(
+            normalize_championship(current_drivers, previous_drivers, 'driver')[1].previous_position,
+            1,
+        )
+
+    def test_championship_impact_endpoint_returns_rank_change(self):
+        impact = ChampionshipImpact(
+            drivers=[ChampionshipStanding(
+                name='Test Driver', external_id='driver', position=1, points=25,
+                previous_position=2, points_change=25,
+            )], constructors=[],
+            sources=['https://api.jolpi.ca/ergast/f1/2026/1/driverstandings/'],
+            updated_at=datetime.now(timezone.utc),
+        )
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.dict('os.environ', {'DATABASE_PATH': f'{directory}/cache.db'}), \
+                TestClient(app) as client:
+            with patch.object(app.state.schedules, 'season', return_value=RaceFeed(
+                races=[normalize(sample())], updated_at=datetime.now(timezone.utc),
+            )), patch.object(app.state.results, 'championship_impact', return_value=impact):
+                response = client.get('/api/v1/races/2026-1/championship-impact')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['drivers'][0]['previous_position'], 2)
+
     def test_strategy_stints_keep_only_published_compounds_and_cache(self):
         rows = normalize_laps([
             {'Driver': 'NOR', 'LapNumber': 1, 'Stint': 1, 'Compound': 'MEDIUM',

@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS season_roster_cache (
 CREATE TABLE IF NOT EXISTS strategy_cache (
     key TEXT PRIMARY KEY, payload TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS championship_impact_cache (
+    key TEXT PRIMARY KEY, payload TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS providers (
     provider_id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, type TEXT NOT NULL,
     base_url TEXT NOT NULL, priority INTEGER NOT NULL, status TEXT NOT NULL,
@@ -429,6 +432,7 @@ def migrate(path: str) -> None:
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (5, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (6, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (7, ?)', (now,))
+        db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (8, ?)', (now,))
         db.execute('PRAGMA foreign_keys = ON')
 
 

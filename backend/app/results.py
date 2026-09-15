@@ -12,7 +12,7 @@ from app.data_schema import (
 )
 from app.models import RaceSummary
 from app.providers.fastf1 import SOURCE_URL as FASTF1_SOURCE_URL, fetch_strategy_rows
-from app.providers.jolpica import BASE_URL, fetch_driver_standings
+from app.providers.jolpica import BASE_URL, fetch_driver_standings, fetch_standings
 
 
 class Result(BaseModel):
@@ -113,6 +113,23 @@ class DriverStrategy(BaseModel):
 class StrategyFeed(BaseModel):
     drivers: list[DriverStrategy]
     source: HttpUrl
+    updated_at: datetime
+    stale: bool = False
+
+
+class ChampionshipStanding(BaseModel):
+    name: str
+    position: int
+    points: float
+    previous_position: int | None = None
+    points_change: float | None = None
+    external_id: str = Field(default='', exclude=True)
+
+
+class ChampionshipImpact(BaseModel):
+    drivers: list[ChampionshipStanding]
+    constructors: list[ChampionshipStanding]
+    sources: list[HttpUrl]
     updated_at: datetime
     stale: bool = False
 
@@ -258,6 +275,33 @@ def normalize_strategy(rows: list[dict]) -> StrategyFeed:
         source=FASTF1_SOURCE_URL,
         updated_at=datetime.now(timezone.utc),
     )
+
+
+def normalize_championship(rows: list[dict], previous: list[dict], kind: str) -> list[ChampionshipStanding]:
+    key = 'Driver' if kind == 'driver' else 'Constructor'
+    id_key = 'driverId' if kind == 'driver' else 'constructorId'
+    previous_by_id = {
+        (row.get(key) or {}).get(id_key): row for row in previous
+    }
+    standings = []
+    for row in rows:
+        entity = row.get(key) or {}
+        external_id = entity.get(id_key)
+        if not external_id or row.get('position') is None or row.get('points') is None:
+            continue
+        name = (f"{entity.get('givenName', '')} {entity.get('familyName', '')}".strip()
+                if kind == 'driver' else entity.get('name'))
+        if not name:
+            continue
+        old = previous_by_id.get(external_id)
+        standings.append(ChampionshipStanding(
+            name=name, external_id=external_id, position=int(row['position']),
+            points=float(row['points']),
+            previous_position=int(old['position']) if old and old.get('position') else None,
+            points_change=(float(row['points']) - float(old['points']))
+            if old and old.get('points') is not None else None,
+        ))
+    return sorted(standings, key=lambda standing: standing.position)
 
 
 class ResultsRepository:
@@ -635,6 +679,49 @@ class ResultsRepository:
             raise
         with closing(connect(self.path)) as db, db:
             db.execute('INSERT OR REPLACE INTO strategy_cache VALUES (?,?)',
+                       (key, feed.model_dump_json()))
+        return feed
+
+    def championship_impact(self, season: int, round_number: int) -> ChampionshipImpact:
+        key = f'{season}-{round_number}'
+        with closing(connect(self.path)) as db:
+            row = db.execute(
+                'SELECT payload FROM championship_impact_cache WHERE key=?', (key,),
+            ).fetchone()
+        cached = ChampionshipImpact.model_validate_json(row[0]) if row else None
+        now = datetime.now(timezone.utc)
+        ttl = 300 if not cached or not cached.drivers else (86400 if season < now.year else 900)
+        if cached and (now - cached.updated_at).total_seconds() < ttl:
+            return cached
+        try:
+            driver_rows = fetch_standings(season, round_number, 'driver')
+            constructor_rows = fetch_standings(season, round_number, 'constructor')
+            previous_driver_rows = fetch_standings(season, round_number - 1, 'driver') \
+                if round_number > 1 else []
+            previous_constructor_rows = fetch_standings(season, round_number - 1, 'constructor') \
+                if round_number > 1 else []
+        except Exception as exc:
+            record_provider_health(
+                self.path, False,
+                schema_changed=isinstance(exc, (KeyError, TypeError, ValueError)),
+            )
+            if cached:
+                return cached.model_copy(update={'stale': True})
+            raise
+        record_provider_health(self.path, True)
+        feed = ChampionshipImpact(
+            drivers=normalize_championship(driver_rows, previous_driver_rows, 'driver'),
+            constructors=normalize_championship(
+                constructor_rows, previous_constructor_rows, 'constructor',
+            ),
+            sources=[
+                f'{BASE_URL}/{season}/{round_number}/driverstandings/',
+                f'{BASE_URL}/{season}/{round_number}/constructorstandings/',
+            ],
+            updated_at=now,
+        )
+        with closing(connect(self.path)) as db, db:
+            db.execute('INSERT OR REPLACE INTO championship_impact_cache VALUES (?,?)',
                        (key, feed.model_dump_json()))
         return feed
 

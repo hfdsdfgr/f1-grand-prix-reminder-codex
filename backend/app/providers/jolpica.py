@@ -86,3 +86,16 @@ def fetch_driver_standings(season: int) -> list[dict]:
     response.raise_for_status()
     standings = response.json()['MRData']['StandingsTable'].get('StandingsLists') or []
     return (standings[0].get('DriverStandings') or []) if standings else []
+
+
+def fetch_standings(season: int, round_number: int, kind: str) -> list[dict]:
+    if kind not in ('driver', 'constructor'):
+        raise ValueError('Unsupported championship kind')
+    response = httpx.get(
+        f'{BASE_URL}/{season}/{round_number}/{kind}standings/',
+        params={'limit': 100}, headers=HEADERS, timeout=15,
+    )
+    response.raise_for_status()
+    standings = response.json()['MRData']['StandingsTable'].get('StandingsLists') or []
+    key = 'DriverStandings' if kind == 'driver' else 'ConstructorStandings'
+    return (standings[0].get(key) or []) if standings else []

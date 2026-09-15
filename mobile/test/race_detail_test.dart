@@ -94,6 +94,30 @@ Map<String, dynamic> strategyFeed() => {
   'stale': false,
 };
 
+Map<String, dynamic> championshipImpactFeed() => {
+  'drivers': [
+    {
+      'name': 'Test Driver',
+      'position': 1,
+      'points': 50,
+      'previous_position': 2,
+      'points_change': 25,
+    },
+  ],
+  'constructors': [
+    {
+      'name': 'Example Team',
+      'position': 1,
+      'points': 80,
+      'previous_position': 1,
+      'points_change': 25,
+    },
+  ],
+  'sources': ['https://api.jolpi.ca/ergast/f1/2030/1/driverstandings/'],
+  'updated_at': '2030-09-13T00:00:00Z',
+  'stale': false,
+};
+
 void main() {
   testWidgets('post-race detail reveals a hidden session on demand', (
     tester,
@@ -112,6 +136,8 @@ void main() {
           jsonEncode(
             request.url.path.endsWith('/strategy')
                 ? strategyFeed()
+                : request.url.path.endsWith('/championship-impact')
+                ? championshipImpactFeed()
                 : request.url.path.endsWith('/story')
                 ? storyFeed()
                 : resultFeed(),
@@ -144,6 +170,8 @@ void main() {
       find.text('Medium · Lap 1–18 · Tyre age 3 · Pit Lap 18'),
       findsOneWidget,
     );
+    expect(find.text('Championship impact'), findsOneWidget);
+    expect(find.text('P1 · Test Driver'), findsOneWidget);
   });
 
   testWidgets('pre-race detail prioritizes schedule and hides results', (

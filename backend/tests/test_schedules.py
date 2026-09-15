@@ -148,7 +148,7 @@ class ScheduleTests(unittest.TestCase):
                 'ai_generations', 'driver_briefs', 'race_briefs', 'review_items',
                 'audit_log',
             }.issubset(tables))
-            self.assertEqual(versions, [1, 2, 3, 4, 5, 6, 7])
+            self.assertEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8])
             self.assertEqual(foreign_key_errors, [])
 
     def test_api_failure_validation_and_rollover(self):
