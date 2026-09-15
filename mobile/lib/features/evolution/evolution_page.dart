@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/language.dart';
 import '../../data/race_repository.dart';
+import 'car_viewer.dart';
 
 class EvolutionPage extends StatefulWidget {
   final RaceRepository repository;
@@ -31,6 +32,8 @@ class _EvolutionPageState extends State<EvolutionPage> {
       const SizedBox(height: 12),
       Text(tr(context, 'Follow what changes on the cars.')),
       const SizedBox(height: 24),
+      const CarViewer(),
+      const SizedBox(height: 32),
       Row(
         children: [
           IconButton(
