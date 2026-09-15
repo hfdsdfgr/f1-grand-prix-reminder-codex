@@ -182,6 +182,14 @@ class RaceRepository {
     return RaceStoryFeed(body);
   }
 
+  Future<StrategyFeed> strategy(String raceId) async {
+    final path = '/api/v1/races/${Uri.encodeComponent(raceId)}/strategy';
+    final (json, cached) = await _get(path, const Duration(seconds: 45));
+    final body = Map<String, dynamic>.from(json as Map);
+    if (cached) body['stale'] = true;
+    return StrategyFeed(body);
+  }
+
   Future<SeasonRosterFeed> roster(int season) async {
     final path = '/api/v1/seasons/$season/roster';
     final (json, cached) = await _get(path, const Duration(seconds: 20));
@@ -284,5 +292,41 @@ class RaceStoryFeed {
           .map((event) => RaceStoryEvent(event as Map<String, dynamic>))
           .toList(),
       updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
+      stale = json['stale'] as bool;
+}
+
+class StrategyStint {
+  final String compound;
+  final int startLap, endLap;
+  final int? tyreAgeAtStart, pitLap;
+  StrategyStint(Map<String, dynamic> json)
+    : compound = json['compound'] as String,
+      startLap = json['start_lap'] as int,
+      endLap = json['end_lap'] as int,
+      tyreAgeAtStart = json['tyre_age_at_start'] as int?,
+      pitLap = json['pit_lap'] as int?;
+}
+
+class DriverStrategy {
+  final String driver;
+  final List<StrategyStint> stints;
+  DriverStrategy(Map<String, dynamic> json)
+    : driver = json['driver'] as String,
+      stints = (json['stints'] as List)
+          .map((stint) => StrategyStint(stint as Map<String, dynamic>))
+          .toList();
+}
+
+class StrategyFeed {
+  final List<DriverStrategy> drivers;
+  final DateTime updatedAt;
+  final String source;
+  final bool stale;
+  StrategyFeed(Map<String, dynamic> json)
+    : drivers = (json['drivers'] as List)
+          .map((driver) => DriverStrategy(driver as Map<String, dynamic>))
+          .toList(),
+      updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
+      source = json['source'] as String,
       stale = json['stale'] as bool;
 }

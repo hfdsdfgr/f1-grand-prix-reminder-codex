@@ -67,15 +67,54 @@ Map<String, dynamic> storyFeed() => {
   'stale': false,
 };
 
+Map<String, dynamic> strategyFeed() => {
+  'drivers': [
+    {
+      'driver': 'Test Driver',
+      'stints': [
+        {
+          'compound': 'Medium',
+          'start_lap': 1,
+          'end_lap': 18,
+          'tyre_age_at_start': 3,
+          'pit_lap': 18,
+        },
+        {
+          'compound': 'Hard',
+          'start_lap': 19,
+          'end_lap': 57,
+          'tyre_age_at_start': 1,
+          'pit_lap': null,
+        },
+      ],
+    },
+  ],
+  'source': 'https://github.com/theOehrly/Fast-F1',
+  'updated_at': '2030-09-13T00:00:00Z',
+  'stale': false,
+};
+
 void main() {
   testWidgets('post-race detail reveals a hidden session on demand', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(812, 375);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     final repo = RaceRepository(
       client: MockClient(
         (request) async => http.Response(
           jsonEncode(
-            request.url.path.endsWith('/story') ? storyFeed() : resultFeed(),
+            request.url.path.endsWith('/strategy')
+                ? strategyFeed()
+                : request.url.path.endsWith('/story')
+                ? storyFeed()
+                : resultFeed(),
           ),
           200,
         ),
@@ -94,11 +133,17 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Results hidden'), findsOneWidget);
+    await tester.ensureVisible(find.text('Reveal this session'));
     await tester.tap(find.text('Reveal this session'));
     await tester.pumpAndSettle();
     expect(find.text('Race result'), findsOneWidget);
     expect(find.text('Race story'), findsOneWidget);
     expect(find.text('Key race facts'), findsOneWidget);
+    expect(find.text('Strategy view'), findsOneWidget);
+    expect(
+      find.text('Medium · Lap 1–18 · Tyre age 3 · Pit Lap 18'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('pre-race detail prioritizes schedule and hides results', (

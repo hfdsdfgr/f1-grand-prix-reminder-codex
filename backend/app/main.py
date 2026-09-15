@@ -11,7 +11,7 @@ from app.models import (
 )
 from app.lifecycle import with_lifecycle
 from app.results import (
-    ResultsRepository, ResultsFeed, RaceStory, SeasonRosterFeed, build_race_story,
+    ResultsRepository, ResultsFeed, RaceStory, SeasonRosterFeed, StrategyFeed, build_race_story,
 )
 from app.repositories.schedules import ScheduleRepository
 
@@ -144,3 +144,12 @@ def race_story(race_id: RaceId):
         return build_race_story(feed)
     except Exception as exc:
         raise HTTPException(503, 'Race story is temporarily unavailable. Please retry.') from exc
+
+
+@app.get('/api/v1/races/{race_id}/strategy', response_model=StrategyFeed)
+def race_strategy(race_id: RaceId):
+    race = race_detail(race_id)
+    try:
+        return app.state.results.strategy(race.season, race.round)
+    except Exception as exc:
+        raise HTTPException(503, 'Race strategy is temporarily unavailable. Please retry.') from exc

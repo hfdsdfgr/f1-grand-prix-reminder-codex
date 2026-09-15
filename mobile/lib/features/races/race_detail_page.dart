@@ -40,6 +40,8 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
   final Map<bool, ResultsFeed> _saved = {};
   Future<RaceStoryFeed>? _storyRequest;
   RaceStoryFeed? _savedStory;
+  Future<StrategyFeed>? _strategyRequest;
+  StrategyFeed? _savedStrategy;
 
   Future<ResultsFeed> _load() => _requests.putIfAbsent(
     _qualifying,
@@ -54,6 +56,11 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
       _storyRequest ??= widget.repository.story(widget.race.id);
 
   void _refreshStory() => setState(() => _storyRequest = null);
+
+  Future<StrategyFeed> _loadStrategy() =>
+      _strategyRequest ??= widget.repository.strategy(widget.race.id);
+
+  void _refreshStrategy() => setState(() => _strategyRequest = null);
 
   @override
   Widget build(BuildContext context) {
@@ -312,6 +319,13 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                   onSaved: (story) => _savedStory = story,
                   onRetry: _refreshStory,
                 ),
+                const SizedBox(height: 32),
+                _RaceStrategy(
+                  future: _loadStrategy(),
+                  saved: _savedStrategy,
+                  onSaved: (strategy) => _savedStrategy = strategy,
+                  onRetry: _refreshStrategy,
+                ),
               ],
               Text(
                 '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',
@@ -438,6 +452,135 @@ class _StoryEvent extends StatelessWidget {
     ),
   );
 }
+
+class _RaceStrategy extends StatelessWidget {
+  final Future<StrategyFeed> future;
+  final StrategyFeed? saved;
+  final ValueChanged<StrategyFeed> onSaved;
+  final VoidCallback onRetry;
+  const _RaceStrategy({
+    required this.future,
+    required this.saved,
+    required this.onSaved,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<StrategyFeed>(
+    future: future,
+    builder: (context, snapshot) {
+      if (snapshot.hasData) onSaved(snapshot.data!);
+      final strategy = snapshot.data ?? saved;
+      if (snapshot.connectionState == ConnectionState.waiting &&
+          strategy == null) {
+        return Center(
+          child: CircularProgressIndicator(
+            semanticsLabel: tr(context, 'Loading strategy'),
+          ),
+        );
+      }
+      if (strategy == null) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(tr(context, 'Unable to load strategy. Please try again.')),
+            TextButton(onPressed: onRetry, child: Text(tr(context, 'Retry'))),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            tr(context, 'Strategy view'),
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            tr(context, 'Tyre compounds and verified pit laps.'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (strategy.stale || snapshot.hasError)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                tr(context, 'Showing saved strategy. It may have changed.'),
+              ),
+            ),
+          const SizedBox(height: 12),
+          if (strategy.drivers.isEmpty)
+            Text(tr(context, 'Strategy data is not available yet.')),
+          for (final driver in strategy.drivers)
+            _DriverStrategy(strategy: driver),
+          const SizedBox(height: 8),
+          Text(
+            tr(context, 'Source: FastF1'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          SelectableText(
+            strategy.source,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _DriverStrategy extends StatelessWidget {
+  final DriverStrategy strategy;
+  const _DriverStrategy({required this.strategy});
+
+  @override
+  Widget build(BuildContext context) {
+    final stops = strategy.stints.where((stint) => stint.pitLap != null).length;
+    final detail = strategy.stints
+        .map((stint) => _stintText(context, stint))
+        .join(' → ');
+    return Semantics(
+      container: true,
+      label:
+          '${strategy.driver}: $detail; $stops ${tr(context, stops == 1 ? 'stop' : 'stops')}',
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                strategy.driver,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (final stint in strategy.stints)
+                    Text(_stintText(context, stint)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${tr(context, 'Stops')}: $stops',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _stintText(BuildContext context, StrategyStint stint) => [
+  tr(context, stint.compound),
+  '${tr(context, 'Lap')} ${stint.startLap}–${stint.endLap}',
+  if (stint.tyreAgeAtStart != null)
+    '${tr(context, 'Tyre age')} ${stint.tyreAgeAtStart}',
+  if (stint.pitLap != null)
+    '${tr(context, 'Pit')} ${tr(context, 'Lap')} ${stint.pitLap}',
+].join(' · ');
 
 String _storyTitle(String kind) => switch (kind) {
   'finish' => 'Winner',

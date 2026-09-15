@@ -8,10 +8,12 @@ from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models import RaceFeed
+from app.providers.fastf1 import normalize_laps
 from app.providers.jolpica import normalize
 from app.results import (
     ResultsRepository, build_race_story, fetch_season_summaries, normalize_results,
-    SeasonRosterEntry, SeasonRosterFeed,
+    SeasonRosterEntry, SeasonRosterFeed, StrategyFeed, StrategyStint, DriverStrategy,
+    normalize_strategy,
 )
 from app.repositories.schedules import ScheduleRepository
 from test_schedules import sample
@@ -23,6 +25,38 @@ def row(**overrides):
 
 
 class ResultsTests(unittest.TestCase):
+    def test_strategy_stints_keep_only_published_compounds_and_cache(self):
+        rows = normalize_laps([
+            {'Driver': 'NOR', 'LapNumber': 1, 'Stint': 1, 'Compound': 'MEDIUM',
+             'TyreLife': 3, 'PitInTime': None},
+            {'Driver': 'NOR', 'LapNumber': 17, 'Stint': 1, 'Compound': 'MEDIUM',
+             'TyreLife': 19, 'PitInTime': '00:30:00'},
+            {'Driver': 'NOR', 'LapNumber': 18, 'Stint': 2, 'Compound': 'HARD',
+             'TyreLife': 1, 'PitInTime': None},
+            {'Driver': 'NOR', 'LapNumber': 57, 'Stint': 2, 'Compound': 'UNKNOWN',
+             'TyreLife': 40, 'PitInTime': None},
+        ], {'NOR': 'Lando Norris'})
+        self.assertEqual(rows, [{
+            'driver': 'Lando Norris', 'compound': 'Medium', 'start_lap': 1,
+            'end_lap': 17, 'tyre_age_at_start': 3, 'pit_lap': 17,
+        }, {
+            'driver': 'Lando Norris', 'compound': 'Hard', 'start_lap': 18,
+            'end_lap': 18, 'tyre_age_at_start': 1, 'pit_lap': None,
+        }])
+        with tempfile.TemporaryDirectory() as directory:
+            repo = ResultsRepository(f'{directory}/data.db')
+            with patch('app.results.fetch_strategy_rows', return_value=rows) as fetch:
+                first = repo.strategy(2026, 1)
+                second = repo.strategy(2026, 1)
+            self.assertEqual(fetch.call_count, 1)
+            self.assertEqual(first.drivers[0].stints[0].pit_lap, 17)
+            self.assertEqual(second.drivers[0].stints[1].compound, 'Hard')
+            with patch('app.results.datetime') as clock, \
+                    patch('app.results.fetch_strategy_rows', side_effect=RuntimeError):
+                clock.now.return_value = datetime.now(timezone.utc) + timedelta(minutes=16)
+                self.assertTrue(repo.strategy(2026, 1).stale)
+        self.assertEqual(normalize_strategy(rows).drivers[0].driver, 'Lando Norris')
+
     def test_source_roster_uses_result_identity_and_falls_back_to_cache(self):
         standings = [{
             'Driver': {
@@ -72,6 +106,24 @@ class ResultsTests(unittest.TestCase):
                 response = client.get('/api/v1/seasons/2026/roster')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['entries'][0]['driver_id'], 'drv_driver')
+
+    def test_strategy_endpoint_returns_stints(self):
+        strategy = StrategyFeed(
+            drivers=[DriverStrategy(driver='Test Driver', stints=[StrategyStint(
+                compound='Medium', start_lap=1, end_lap=20, pit_lap=20,
+            )])],
+            source='https://github.com/theOehrly/Fast-F1',
+            updated_at=datetime.now(timezone.utc),
+        )
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.dict('os.environ', {'DATABASE_PATH': f'{directory}/cache.db'}), \
+                TestClient(app) as client:
+            with patch.object(app.state.schedules, 'season', return_value=RaceFeed(
+                races=[normalize(sample())], updated_at=datetime.now(timezone.utc),
+            )), patch.object(app.state.results, 'strategy', return_value=strategy):
+                response = client.get('/api/v1/races/2026-1/strategy')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['drivers'][0]['stints'][0]['pit_lap'], 20)
 
     def test_season_summaries_are_batched_and_cached(self):
         driver = {'driverId': 'driver', 'givenName': 'Test', 'familyName': 'Winner'}

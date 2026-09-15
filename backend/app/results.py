@@ -11,6 +11,7 @@ from app.data_schema import (
     PROVIDER_ID, connect, migrate, new_id, record_provider_health, store_raw,
 )
 from app.models import RaceSummary
+from app.providers.fastf1 import SOURCE_URL as FASTF1_SOURCE_URL, fetch_strategy_rows
 from app.providers.jolpica import BASE_URL, fetch_driver_standings
 
 
@@ -94,6 +95,26 @@ class SeasonRosterFeed(BaseModel):
     updated_at: datetime
     stale: bool = False
     raw_rows: list[dict] | None = Field(default=None, exclude=True)
+
+
+class StrategyStint(BaseModel):
+    compound: Literal['Soft', 'Medium', 'Hard', 'Intermediate', 'Wet']
+    start_lap: int
+    end_lap: int
+    tyre_age_at_start: int | None = None
+    pit_lap: int | None = None
+
+
+class DriverStrategy(BaseModel):
+    driver: str
+    stints: list[StrategyStint]
+
+
+class StrategyFeed(BaseModel):
+    drivers: list[DriverStrategy]
+    source: HttpUrl
+    updated_at: datetime
+    stale: bool = False
 
 
 def normalize_results(rows: list[dict], source: str, kind: str) -> ResultsFeed:
@@ -217,6 +238,25 @@ def normalize_roster(rows: list[dict], season: int) -> SeasonRosterFeed:
         source=f'{BASE_URL}/{season}/driverstandings/',
         updated_at=datetime.now(timezone.utc),
         raw_rows=rows,
+    )
+
+
+def normalize_strategy(rows: list[dict]) -> StrategyFeed:
+    drivers: dict[str, list[StrategyStint]] = {}
+    for row in rows:
+        driver = row.get('driver')
+        if not driver:
+            continue
+        try:
+            stint = StrategyStint.model_validate(row)
+        except (TypeError, ValueError):
+            continue
+        drivers.setdefault(driver, []).append(stint)
+    return StrategyFeed(
+        drivers=[DriverStrategy(driver=driver, stints=stints)
+                 for driver, stints in drivers.items()],
+        source=FASTF1_SOURCE_URL,
+        updated_at=datetime.now(timezone.utc),
     )
 
 
@@ -577,6 +617,26 @@ class ResultsRepository:
             db.execute('INSERT OR REPLACE INTO season_roster_cache VALUES (?,?)',
                        (season, hydrated.model_dump_json()))
         return hydrated
+
+    def strategy(self, season: int, round_number: int) -> StrategyFeed:
+        key = f'{season}-{round_number}'
+        with closing(connect(self.path)) as db:
+            row = db.execute('SELECT payload FROM strategy_cache WHERE key=?', (key,)).fetchone()
+        cached = StrategyFeed.model_validate_json(row[0]) if row else None
+        now = datetime.now(timezone.utc)
+        ttl = 300 if not cached or not cached.drivers else (86400 if season < now.year else 900)
+        if cached and (now - cached.updated_at).total_seconds() < ttl:
+            return cached
+        try:
+            feed = normalize_strategy(fetch_strategy_rows(season, round_number))
+        except Exception:
+            if cached:
+                return cached.model_copy(update={'stale': True})
+            raise
+        with closing(connect(self.path)) as db, db:
+            db.execute('INSERT OR REPLACE INTO strategy_cache VALUES (?,?)',
+                       (key, feed.model_dump_json()))
+        return feed
 
     def _persist_roster(self, season: int, feed: SeasonRosterFeed) -> SeasonRosterFeed:
         """Persist provider identities so roster and results share stable local IDs."""
