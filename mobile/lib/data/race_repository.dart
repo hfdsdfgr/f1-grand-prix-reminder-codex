@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/api_config.dart';
+
 class RaceSession {
   final String kind;
   final String? internalId;
@@ -121,10 +123,7 @@ class RaceRepository {
   RaceRepository({
     http.Client? client,
     this.preferences,
-    this.baseUrl = const String.fromEnvironment(
-      'API_BASE_URL',
-      defaultValue: 'http://127.0.0.1:8000',
-    ),
+    this.baseUrl = ApiConfig.baseUrl,
   }) : client = client ?? http.Client();
 
   String _cacheKey(String path) => 'api-cache:$baseUrl$path';

@@ -1,4 +1,8 @@
-param([string]$ApiBaseUrl = 'http://10.0.2.2:8000')
+param(
+    [ValidateSet('development', 'test')]
+    [string]$ApiEnvironment = 'test',
+    [string]$ApiBaseUrl = ''
+)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $env:ANDROID_HOME = Join-Path $projectRoot '.tools/android-sdk'
@@ -16,6 +20,8 @@ if ($env:HTTPS_PROXY) {
 $env:GRADLE_OPTS = $gradleOptions
 Push-Location (Join-Path $projectRoot 'mobile')
 try {
-    & (Join-Path $projectRoot '.tools/flutter/bin/flutter.bat') build apk --debug "--dart-define=API_BASE_URL=$ApiBaseUrl"
+    $dartDefines = @("--dart-define=API_ENV=$ApiEnvironment")
+    if ($ApiBaseUrl) { $dartDefines += "--dart-define=API_BASE_URL=$ApiBaseUrl" }
+    & (Join-Path $projectRoot '.tools/flutter/bin/flutter.bat') build apk --debug @dartDefines
     if ($LASTEXITCODE -ne 0) { throw 'Android build failed.' }
 } finally { Pop-Location }

@@ -4,5 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Debug-only HTTP for the temporary IP-based test backend. Release and
+         profile variants do not opt in to cleartext traffic. -->
     <application android:usesCleartextTraffic="true" />
 </manifest>

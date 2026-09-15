@@ -47,13 +47,15 @@ Briefing、Evolution、规则、积分、处罚、单圈、轮胎、进站、赛
 ```powershell
 cd mobile
 ../.tools/flutter/bin/flutter.bat pub get
-../.tools/flutter/bin/flutter.bat run -d chrome --web-port=3000 --dart-define=API_BASE_URL=http://127.0.0.1:8000
+../.tools/flutter/bin/flutter.bat run -d chrome --web-port=3000
 ```
 
-Android 模拟器使用 `--dart-define=API_BASE_URL=http://10.0.2.2:8000`。
-真机需要可访问的后端地址；生产环境使用 HTTPS。iOS 构建需要 macOS/Xcode，Android 构建需要 Android SDK。
+默认 `development` 环境使用本地 Backend。Android 模拟器使用
+`--dart-define=API_BASE_URL=http://10.0.2.2:8000`；真机测试使用
+`--dart-define=API_ENV=test`，连接已配置的 ECS Nginx Backend。真机正式发布
+必须使用 HTTPS。iOS 构建需要 macOS/Xcode，Android 构建需要 Android SDK。
 
-本机已安装 Android SDK、Android 35 模拟器镜像及硬件加速驱动，AVD 名为 `F1Reminder_API35`。在仓库根目录运行 `scripts/run-emulator.ps1 -ShowWindow` 可显示模拟器；运行 `scripts/build-android.ps1` 构建连接本机后端的调试 APK。SDK、镜像和构建缓存保留在忽略的 `.tools` 中。
+本机已安装 Android SDK、Android 35 模拟器镜像及硬件加速驱动，AVD 名为 `F1Reminder_API35`。在仓库根目录运行 `scripts/run-emulator.ps1 -ShowWindow` 可显示模拟器；运行 `scripts/build-android.ps1` 构建连接 ECS 测试 Backend 的调试 APK，或以 `-ApiEnvironment development` 构建本地开发版本。SDK、镜像和构建缓存保留在忽略的 `.tools` 中。
 `scripts/reminder-fixture.py` 是独立的模拟赛历服务（端口 8001），配合 `scripts/build-android.ps1 -ApiBaseUrl http://10.0.2.2:8001` 验证连续通知；该数据仅供测试。
 
 ## 检查
