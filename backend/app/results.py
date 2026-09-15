@@ -57,6 +57,22 @@ class ResultsFeed(BaseModel):
     raw_rows: list[dict] | None = Field(default=None, exclude=True)
 
 
+class RaceStoryEvent(BaseModel):
+    kind: Literal['finish', 'gain', 'loss', 'fastest_lap']
+    driver: str
+    grid_position: int | None = None
+    finish_position: int | None = None
+    lap: int | None = None
+    time: str | None = None
+
+
+class RaceStory(BaseModel):
+    events: list[RaceStoryEvent]
+    source: HttpUrl
+    updated_at: datetime
+    stale: bool = False
+
+
 class SeasonSummaryFeed(BaseModel):
     summaries: dict[int, RaceSummary]
     updated_at: datetime
@@ -94,6 +110,42 @@ def normalize_results(rows: list[dict], source: str, kind: str) -> ResultsFeed:
             fastest = FastestLap(driver=driver, lap=int(lap['lap']), time=lap['Time']['time'])
     return ResultsFeed(entries=sorted(entries, key=lambda r: r.position), fastest_lap=fastest,
                        source=source, updated_at=datetime.now(timezone.utc), raw_rows=rows)
+
+
+def build_race_story(feed: ResultsFeed) -> RaceStory:
+    """Derive only facts supported by final classification and fastest-lap data."""
+    events = []
+    winner = next((entry for entry in feed.entries if entry.position == 1), None)
+    if winner:
+        events.append(RaceStoryEvent(
+            kind='finish', driver=winner.driver, grid_position=winner.grid,
+            finish_position=winner.position,
+        ))
+    grid_entries = [
+        entry for entry in feed.entries
+        if entry.grid is not None and entry.grid > 0 and entry.position > 0
+    ]
+    if grid_entries:
+        gain = max(grid_entries, key=lambda entry: entry.grid - entry.position)
+        if gain.grid > gain.position:
+            events.append(RaceStoryEvent(
+                kind='gain', driver=gain.driver, grid_position=gain.grid,
+                finish_position=gain.position,
+            ))
+        loss = max(grid_entries, key=lambda entry: entry.position - entry.grid)
+        if loss.position > loss.grid:
+            events.append(RaceStoryEvent(
+                kind='loss', driver=loss.driver, grid_position=loss.grid,
+                finish_position=loss.position,
+            ))
+    if feed.fastest_lap:
+        events.append(RaceStoryEvent(
+            kind='fastest_lap', driver=feed.fastest_lap.driver,
+            lap=feed.fastest_lap.lap, time=feed.fastest_lap.time,
+        ))
+    return RaceStory(
+        events=events, source=feed.source, updated_at=feed.updated_at, stale=feed.stale,
+    )
 
 
 def fetch_results(season: int, round_number: int, kind: str) -> ResultsFeed:

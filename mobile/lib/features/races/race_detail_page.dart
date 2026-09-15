@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/language.dart';
 import '../../data/race_repository.dart';
+import '../../data/follow_service.dart';
 import '../../data/reminder_service.dart';
 import '../../shared/race_feed_view.dart';
 import '../home/home_page.dart';
@@ -15,6 +16,7 @@ class RaceDetailPage extends StatefulWidget {
   final Future<void> Function(bool)? syncReminders;
   final bool spoilerHidden;
   final VoidCallback? onReveal;
+  final FollowService? follows;
   const RaceDetailPage({
     super.key,
     required this.race,
@@ -23,6 +25,7 @@ class RaceDetailPage extends StatefulWidget {
     this.syncReminders,
     this.spoilerHidden = false,
     this.onReveal,
+    this.follows,
   });
 
   @override
@@ -34,6 +37,8 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
   bool _revealed = false;
   final Map<bool, Future<ResultsFeed>> _requests = {};
   final Map<bool, ResultsFeed> _saved = {};
+  Future<RaceStoryFeed>? _storyRequest;
+  RaceStoryFeed? _savedStory;
 
   Future<ResultsFeed> _load() => _requests.putIfAbsent(
     _qualifying,
@@ -43,6 +48,11 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
   void _refresh() => setState(() {
     _requests.remove(_qualifying);
   });
+
+  Future<RaceStoryFeed> _loadStory() =>
+      _storyRequest ??= widget.repository.story(widget.race.id);
+
+  void _refreshStory() => setState(() => _storyRequest = null);
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +259,10 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
+                      if (widget.follows case final follows?) ...[
+                        const SizedBox(height: 8),
+                        _FollowActions(entry: entry, follows: follows),
+                      ],
                       const SizedBox(height: 12),
                       if (_qualifying)
                         Wrap(
@@ -285,6 +299,15 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                 ),
                 const Divider(),
               ],
+              if (!_qualifying) ...[
+                const SizedBox(height: 24),
+                _RaceStory(
+                  future: _loadStory(),
+                  saved: _savedStory,
+                  onSaved: (story) => _savedStory = story,
+                  onRetry: _refreshStory,
+                ),
+              ],
               Text(
                 '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',
                 style: Theme.of(context).textTheme.bodySmall,
@@ -299,6 +322,176 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
         },
       ),
     ],
+  );
+}
+
+class _RaceStory extends StatelessWidget {
+  final Future<RaceStoryFeed> future;
+  final RaceStoryFeed? saved;
+  final ValueChanged<RaceStoryFeed> onSaved;
+  final VoidCallback onRetry;
+  const _RaceStory({
+    required this.future,
+    required this.saved,
+    required this.onSaved,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<RaceStoryFeed>(
+    future: future,
+    builder: (context, snapshot) {
+      if (snapshot.hasData) onSaved(snapshot.data!);
+      final story = snapshot.data ?? saved;
+      if (snapshot.connectionState == ConnectionState.waiting &&
+          story == null) {
+        return Center(
+          child: CircularProgressIndicator(
+            semanticsLabel: tr(context, 'Loading race story'),
+          ),
+        );
+      }
+      if (story == null) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(tr(context, 'Unable to load race story. Please try again.')),
+            TextButton(onPressed: onRetry, child: Text(tr(context, 'Retry'))),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            tr(context, 'Race story'),
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            tr(context, 'Key race facts'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (story.stale || snapshot.hasError)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                tr(context, 'Showing saved race story. It may have changed.'),
+              ),
+            ),
+          const SizedBox(height: 12),
+          if (story.events.isEmpty)
+            Text(tr(context, 'Race story is not available yet.')),
+          for (final event in story.events) _StoryEvent(event: event),
+        ],
+      );
+    },
+  );
+}
+
+class _StoryEvent extends StatelessWidget {
+  final RaceStoryEvent event;
+  const _StoryEvent({required this.event});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    label: '${tr(context, _storyTitle(event.kind))}, ${event.driver}',
+    child: ExcludeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              _storyIcon(event.kind),
+              size: 18,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tr(context, _storyTitle(event.kind)),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Text(event.driver),
+                  if (event.gridPosition != null)
+                    Text(
+                      '${tr(context, 'Start')} P${event.gridPosition} · ${tr(context, 'Finish')} P${event.finishPosition}',
+                    ),
+                  if (event.lap != null)
+                    Text('${tr(context, 'Lap')} ${event.lap} · ${event.time}'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+String _storyTitle(String kind) => switch (kind) {
+  'finish' => 'Winner',
+  'gain' => 'Biggest gain',
+  'loss' => 'Biggest loss',
+  _ => 'Fastest lap',
+};
+
+IconData _storyIcon(String kind) => switch (kind) {
+  'finish' => Icons.emoji_events_outlined,
+  'gain' => Icons.trending_up,
+  'loss' => Icons.trending_down,
+  _ => Icons.speed_outlined,
+};
+
+class _FollowActions extends StatelessWidget {
+  final ResultEntry entry;
+  final FollowService follows;
+  const _FollowActions({required this.entry, required this.follows});
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: follows,
+    builder: (context, _) => Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (entry.driverId case final id?)
+          _FollowButton(
+            label: 'driver',
+            followed: follows.followsDriver(id),
+            onPressed: () => follows.toggleDriver(id, entry.driver),
+          ),
+        if (entry.teamId case final id?)
+          _FollowButton(
+            label: 'team',
+            followed: follows.followsTeam(id),
+            onPressed: () => follows.toggleTeam(id, entry.team),
+          ),
+      ],
+    ),
+  );
+}
+
+class _FollowButton extends StatelessWidget {
+  final String label;
+  final bool followed;
+  final Future<void> Function() onPressed;
+  const _FollowButton({
+    required this.label,
+    required this.followed,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onPressed,
+    icon: Icon(followed ? Icons.star : Icons.star_border),
+    label: Text(tr(context, followed ? 'Following $label' : 'Follow $label')),
   );
 }
 
@@ -333,6 +526,11 @@ class _WeekendSection extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      Text(
+        tr(context, 'Weekend hub'),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 20),
       if (race.currentSession case final current?) ...[
         Text(
           tr(context, 'Current session'),
@@ -376,12 +574,37 @@ class _WeekendSection extends StatelessWidget {
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 12),
-      for (final session in race.sessions)
-        Padding(
+      for (final session in race.sessions) _SessionRow(session: session),
+    ],
+  );
+}
+
+class _SessionRow extends StatelessWidget {
+  final RaceSession session;
+  const _SessionRow({required this.session});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = tr(context, sessionStatusLabel(session.status));
+    return Semantics(
+      container: true,
+      label: '${tr(context, session.kind)}, $status',
+      child: ExcludeSemantics(
+        child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 3, right: 12),
+                child: Icon(
+                  _statusIcon(session.status),
+                  size: 18,
+                  color: session.status == 'started'
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,10 +613,7 @@ class _WeekendSection extends StatelessWidget {
                       tr(context, session.kind),
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    Text(
-                      tr(context, sessionStatusLabel(session.status)),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text(status, style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),
@@ -409,9 +629,18 @@ class _WeekendSection extends StatelessWidget {
             ],
           ),
         ),
-    ],
-  );
+      ),
+    );
+  }
 }
+
+IconData _statusIcon(String status) => switch (status) {
+  'started' => Icons.radio_button_checked,
+  'completed' => Icons.check_circle_outline,
+  'delayed' || 'rescheduled' => Icons.schedule,
+  'cancelled' => Icons.cancel_outlined,
+  _ => Icons.circle_outlined,
+};
 
 String _phaseLabel(String phase) => switch (phase) {
   'race_weekend' => 'Race weekend',

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/language.dart';
 import '../../core/spoilers.dart';
 import '../../data/race_repository.dart';
+import '../../data/follow_service.dart';
 import '../../data/reminder_service.dart';
 import 'reminder_controls.dart';
 import '../../shared/race_feed_view.dart';
@@ -17,6 +18,7 @@ class HomePage extends StatelessWidget {
   final bool spoilerFree;
   final Set<String> revealedSessions;
   final ValueChanged<String>? onRevealSession;
+  final FollowService? follows;
   const HomePage({
     super.key,
     required this.repository,
@@ -25,6 +27,7 @@ class HomePage extends StatelessWidget {
     this.spoilerFree = false,
     this.revealedSessions = const {},
     this.onRevealSession,
+    this.follows,
   });
   @override
   Widget build(BuildContext context) => RaceFeedView(
@@ -112,6 +115,7 @@ class HomePage extends StatelessWidget {
                   ),
                   onReveal: () =>
                       onRevealSession?.call(spoilerSessionKey(race.id)),
+                  follows: follows,
                 ),
               ),
             ),

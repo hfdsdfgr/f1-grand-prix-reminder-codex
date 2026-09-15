@@ -10,7 +10,7 @@ from app.main import app
 from app.models import RaceFeed
 from app.providers.jolpica import normalize
 from app.results import (
-    ResultsRepository, fetch_season_summaries, normalize_results,
+    ResultsRepository, build_race_story, fetch_season_summaries, normalize_results,
 )
 from app.repositories.schedules import ScheduleRepository
 from test_schedules import sample
@@ -68,6 +68,20 @@ class ResultsTests(unittest.TestCase):
         qualifying = normalize_results([row(Q1='1:20.000')], 'https://example.com/qualifying', 'qualifying')
         self.assertIsNone(qualifying.entries[0].q2)
         self.assertIsNone(qualifying.fastest_lap)
+
+    def test_race_story_contains_only_supported_result_facts(self):
+        feed = normalize_results([
+            row(position='1', grid='4', Driver={'givenName': 'Winner', 'familyName': 'Driver'}),
+            row(position='2', grid='10', Driver={'givenName': 'Gained', 'familyName': 'Driver'},
+                FastestLap={'rank': '1', 'lap': '35', 'Time': {'time': '1:20.123'}}),
+            row(position='12', grid='3', Driver={'givenName': 'Lost', 'familyName': 'Driver'}),
+        ], 'https://example.com/results', 'results')
+        story = build_race_story(feed)
+        self.assertEqual([event.kind for event in story.events], [
+            'finish', 'gain', 'loss', 'fastest_lap',
+        ])
+        self.assertEqual(story.events[1].driver, 'Gained Driver')
+        self.assertEqual(story.events[-1].lap, 35)
 
     def test_independent_cache_and_outage(self):
         with tempfile.TemporaryDirectory() as directory:

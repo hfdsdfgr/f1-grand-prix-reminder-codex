@@ -35,7 +35,10 @@ def with_lifecycle(race: Race, now: datetime) -> Race:
         for session in race.sessions
     ]
     timed = [session for session in sessions if session.starts_at is not None]
-    current = next((session for session in timed if session.status == 'started'), None)
+    current = next(
+        (session for session in timed if session.status in {'started', 'delayed'}),
+        None,
+    )
     upcoming = next(
         (session for session in timed if session.starts_at > now and session.status != 'cancelled'),
         None,

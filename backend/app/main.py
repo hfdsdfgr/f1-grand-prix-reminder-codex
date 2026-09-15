@@ -10,7 +10,7 @@ from app.models import (
     NextRace, ProviderHealthRead, RaceFeed, Race, ScheduleRevisionRead,
 )
 from app.lifecycle import with_lifecycle
-from app.results import ResultsRepository, ResultsFeed
+from app.results import ResultsRepository, ResultsFeed, RaceStory, build_race_story
 from app.repositories.schedules import ScheduleRepository
 
 
@@ -122,3 +122,13 @@ def results(race_id: RaceId):
 @app.get('/api/v1/races/{race_id}/qualifying', response_model=ResultsFeed)
 def qualifying(race_id: RaceId):
     return session_results(race_id, 'qualifying')
+
+
+@app.get('/api/v1/races/{race_id}/story', response_model=RaceStory)
+def race_story(race_id: RaceId):
+    race = race_detail(race_id)
+    try:
+        feed = app.state.results.load(race.season, race.round, 'results')
+        return build_race_story(feed)
+    except Exception as exc:
+        raise HTTPException(503, 'Race story is temporarily unavailable. Please retry.') from exc

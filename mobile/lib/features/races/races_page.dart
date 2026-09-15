@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/language.dart';
 import '../../core/spoilers.dart';
 import '../../data/race_repository.dart';
+import '../../data/follow_service.dart';
 import '../../data/reminder_service.dart';
 import '../../shared/race_feed_view.dart';
 import 'race_detail_page.dart';
@@ -14,6 +15,7 @@ class RacesPage extends StatefulWidget {
   final bool spoilerFree;
   final Set<String> revealedSessions;
   final ValueChanged<String>? onRevealSession;
+  final FollowService? follows;
   const RacesPage({
     super.key,
     required this.repository,
@@ -22,6 +24,7 @@ class RacesPage extends StatefulWidget {
     this.spoilerFree = false,
     this.revealedSessions = const {},
     this.onRevealSession,
+    this.follows,
   });
   @override
   State<RacesPage> createState() => _RacesPageState();
@@ -89,6 +92,7 @@ class _RacesPageState extends State<RacesPage> {
                       onReveal: () => widget.onRevealSession?.call(
                         spoilerSessionKey(race.id),
                       ),
+                      follows: widget.follows,
                     ),
                   ),
                 ),

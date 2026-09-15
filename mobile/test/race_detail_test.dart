@@ -41,13 +41,42 @@ Map<String, dynamic> resultFeed({bool empty = false}) => {
   'stale': false,
 };
 
+Map<String, dynamic> storyFeed() => {
+  'events': [
+    {
+      'kind': 'finish',
+      'driver': 'Test Driver',
+      'grid_position': 4,
+      'finish_position': 1,
+      'lap': null,
+      'time': null,
+    },
+    {
+      'kind': 'fastest_lap',
+      'driver': 'Test Driver',
+      'grid_position': null,
+      'finish_position': null,
+      'lap': 12,
+      'time': '1:20.123',
+    },
+  ],
+  'source': 'https://example.com/results',
+  'updated_at': '2030-09-13T00:00:00Z',
+  'stale': false,
+};
+
 void main() {
   testWidgets('post-race detail reveals a hidden session on demand', (
     tester,
   ) async {
     final repo = RaceRepository(
       client: MockClient(
-        (_) async => http.Response(jsonEncode(resultFeed()), 200),
+        (request) async => http.Response(
+          jsonEncode(
+            request.url.path.endsWith('/story') ? storyFeed() : resultFeed(),
+          ),
+          200,
+        ),
       ),
     );
     addTearDown(repo.dispose);
@@ -64,8 +93,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Results hidden'), findsOneWidget);
     await tester.tap(find.text('Reveal this session'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('Race result'), findsOneWidget);
+    expect(find.text('Race story'), findsOneWidget);
+    expect(find.text('Key race facts'), findsOneWidget);
   });
 
   testWidgets('pre-race detail prioritizes schedule and hides results', (
@@ -107,6 +138,66 @@ void main() {
     );
     expect(find.text('Weekend schedule'), findsOneWidget);
     expect(find.text('Race result'), findsNothing);
+  });
+
+  testWidgets('weekend hub distinguishes every session status', (tester) async {
+    final race = Race({
+      ...fixture(),
+      'lifecycle_phase': 'race_weekend',
+      'current_session': {
+        'kind': 'FP2',
+        'starts_at': '2030-09-14T12:00:00Z',
+        'status': 'started',
+      },
+      'sessions': [
+        {
+          'kind': 'FP1',
+          'starts_at': '2030-09-13T12:00:00Z',
+          'status': 'completed',
+        },
+        {
+          'kind': 'FP2',
+          'starts_at': '2030-09-14T12:00:00Z',
+          'status': 'started',
+        },
+        {
+          'kind': 'FP3',
+          'starts_at': '2030-09-14T15:00:00Z',
+          'status': 'delayed',
+        },
+        {
+          'kind': 'Qualifying',
+          'starts_at': '2030-09-14T18:00:00Z',
+          'status': 'cancelled',
+        },
+        {
+          'kind': 'Race',
+          'starts_at': '2030-09-15T12:00:00Z',
+          'status': 'scheduled',
+        },
+      ],
+    });
+    final repo = RaceRepository(
+      client: MockClient((_) async => http.Response('', 503)),
+    );
+    addTearDown(repo.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RaceDetailPage(race: race, repository: repo),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Weekend hub'), findsOneWidget);
+    for (final status in [
+      'Completed',
+      'Live',
+      'Delayed',
+      'Cancelled',
+      'Upcoming',
+    ]) {
+      expect(find.text(status), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

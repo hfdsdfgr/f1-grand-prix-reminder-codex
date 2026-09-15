@@ -170,6 +170,14 @@ class RaceRepository {
     if (cached) body['stale'] = true;
     return ResultsFeed(body);
   }
+
+  Future<RaceStoryFeed> story(String raceId) async {
+    final path = '/api/v1/races/${Uri.encodeComponent(raceId)}/story';
+    final (json, cached) = await _get(path, const Duration(seconds: 35));
+    final body = Map<String, dynamic>.from(json as Map);
+    if (cached) body['stale'] = true;
+    return RaceStoryFeed(body);
+  }
 }
 
 class ResultEntry {
@@ -222,4 +230,29 @@ class ResultsFeed {
       updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
       stale = json['stale'] as bool,
       source = json['source'] as String;
+}
+
+class RaceStoryEvent {
+  final String kind, driver;
+  final int? gridPosition, finishPosition, lap;
+  final String? time;
+  RaceStoryEvent(Map<String, dynamic> json)
+    : kind = json['kind'] as String,
+      driver = json['driver'] as String,
+      gridPosition = json['grid_position'] as int?,
+      finishPosition = json['finish_position'] as int?,
+      lap = json['lap'] as int?,
+      time = json['time'] as String?;
+}
+
+class RaceStoryFeed {
+  final List<RaceStoryEvent> events;
+  final DateTime updatedAt;
+  final bool stale;
+  RaceStoryFeed(Map<String, dynamic> json)
+    : events = (json['events'] as List)
+          .map((event) => RaceStoryEvent(event as Map<String, dynamic>))
+          .toList(),
+      updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
+      stale = json['stale'] as bool;
 }

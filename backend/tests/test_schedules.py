@@ -38,6 +38,22 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(post.status, 'completed')
         self.assertEqual(race.status, 'unknown')
 
+    def test_delayed_session_remains_current_in_weekend_hub(self):
+        raw = sample()
+        raw['FirstPractice'] = {'date': '2026-03-06', 'time': '02:00:00Z'}
+        race = normalize(raw)
+        delayed = race.model_copy(update={
+            'sessions': [
+                race.sessions[0].model_copy(update={'status': 'delayed'}),
+                *race.sessions[1:],
+            ],
+        })
+        weekend = with_lifecycle(
+            delayed, datetime(2026, 3, 6, 2, 30, tzinfo=timezone.utc),
+        )
+        self.assertEqual(weekend.current_session.kind, 'FP1')
+        self.assertEqual(weekend.current_session.status, 'delayed')
+
     def test_versioned_circuit_layout_is_attached_and_persisted(self):
         with tempfile.TemporaryDirectory() as directory:
             raw = sample()

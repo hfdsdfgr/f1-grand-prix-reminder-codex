@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/language.dart';
 
 import 'core/theme.dart';
+import 'data/follow_service.dart';
 import 'data/race_repository.dart';
 import 'data/reminder_service.dart';
 import 'features/home/home_page.dart';
@@ -29,6 +30,9 @@ class _GrandPrixAppState extends State<GrandPrixApp>
   late final ReminderService? _reminders = widget.preferences == null
       ? null
       : ReminderService(widget.preferences!);
+  late final FollowService? _follows = widget.preferences == null
+      ? null
+      : FollowService(widget.preferences!);
   late String _language = widget.preferences?.getString('language') == 'en'
       ? 'en'
       : 'zh';
@@ -95,6 +99,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
   @override
   void dispose() {
     _reminderTimer?.cancel();
+    _follows?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     if (widget.repository == null) _repository.dispose();
     super.dispose();
@@ -119,6 +124,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
                 builder: (_) => SettingsPage(
                   spoilerFree: _spoilerFree,
                   onSpoilerFreeChanged: _changeSpoilerFree,
+                  follows: _follows,
                 ),
               ),
             ),
@@ -165,6 +171,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
                   spoilerFree: _spoilerFree,
                   revealedSessions: _revealedSessions,
                   onRevealSession: _revealSession,
+                  follows: _follows,
                 ),
                 1 => RacesPage(
                   repository: _repository,
@@ -174,6 +181,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
                   spoilerFree: _spoilerFree,
                   revealedSessions: _revealedSessions,
                   onRevealSession: _revealSession,
+                  follows: _follows,
                 ),
                 2 => const PlannedPage(
                   title: 'Briefing',
