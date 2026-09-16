@@ -7,35 +7,88 @@
   *{box-sizing:border-box}body{margin:0;background:#fafafa;color:#202124;font:15px/1.6 system-ui,sans-serif}main{max-width:1400px;margin:auto;padding:28px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #dadce0;padding-bottom:20px}h1{font-size:24px;margin:0}p{color:#5f6368;margin:6px 0}button,select,input{font:inherit}button,select{min-height:44px;border:1px solid #dadce0;background:white;border-radius:5px;padding:8px 12px;color:inherit}button{cursor:pointer}button:hover{background:#f1f2f3}button:focus-visible,select:focus-visible,canvas:focus-visible{outline:3px solid #b42318;outline-offset:3px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:32px;padding-top:24px}.stage{position:relative;background:#fff;border-bottom:1px solid #dadce0}canvas{width:100%;height:580px;display:block;touch-action:none;cursor:grab}canvas:active{cursor:grabbing}.tag{position:absolute;top:16px;left:18px;color:#5f6368;pointer-events:none;font-size:13px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:16px 0}aside section{padding-bottom:22px;margin-bottom:20px;border-bottom:1px solid #dadce0}h2{font-size:16px;margin:0 0 12px}label{display:block;margin:12px 0 4px}select,input[type=range]{width:100%}input{accent-color:#b42318}output{float:right;font-variant-numeric:tabular-nums}.check{display:flex;align-items:center;gap:10px}.check input{width:18px;height:18px}#selected{color:#b42318}textarea{width:100%;height:115px;border:1px solid #dadce0;padding:8px;resize:vertical;font:12px/1.5 monospace}small{color:#5f6368} @media(max-width:800px){main{padding:16px}.layout{grid-template-columns:1fr;gap:16px}canvas{height:420px}header{display:block}aside{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px}}
 </style>
 <main>
-  <header><div><h1>赛车交互调试</h1><p>GrandPrixReminder · 通用低精度模型</p></div><small>独立 HTML · 无网络依赖</small></header>
+  <header><div><small>GRANDPRIXREMINDER / EVOLUTION</small><h1>探索赛车的构造</h1><p>通用技术示意 · 非真实车型复刻</p></div><small>Phase 1 · 离线交互原型</small></header>
+  <nav class="toolbar" aria-label="车队配色"><button data-team="neutral" aria-pressed="true">通用模型</button><button data-team="ferrari" aria-pressed="false">Ferrari</button><button data-team="mclaren" aria-pressed="false">McLaren</button><button data-team="mercedes" aria-pressed="false">Mercedes</button><button data-team="redbull" aria-pressed="false">Red Bull</button></nav>
+  <div class="identity"><div><label for="generation">车型档案</label><select id="generation"></select></div><a id="official" target="_blank" rel="noopener noreferrer" hidden>Official Car ↗</a></div>
+  <p id="availability">当前展示通用结构，不对应车队、赛季或比赛规格。</p>
   <div class="layout"><div>
     <div class="stage"><span class="tag">拖动旋转 / 滚轮或双指缩放 / 点击部件</span><canvas id="car" tabindex="0" aria-label="交互赛车模型：方向键旋转，加减号缩放，右侧菜单选择部件"></canvas></div>
     <div class="toolbar"><button data-view="default">重置视角</button><button data-view="front">正面</button><button data-view="side">侧面</button><button data-view="top">俯视</button><button data-view="rear">后方</button></div>
-    <p id="status" aria-live="polite">已选择：前翼</p><small>使用与当前 Flutter 版本相同的方块几何，方便先调整旋转手感和部件交互。模型不代表真实车队规格。</small>
+    <p id="status" aria-live="polite">已选择：前翼</p><small>拖拽旋转手感保持不变。车队按钮仅预览配色；车型档案不将通用模型冒充为真实世代。</small>
   </div><aside>
-    <section><h2>部件 · <span id="selected">前翼</span></h2><select id="part" aria-label="选择赛车部件"></select><label class="check"><input id="focus" type="checkbox">单独查看选中部件</label><label class="check"><input id="wire" type="checkbox">线框模式</label><label class="check"><input id="labels" type="checkbox" checked>显示连线标注</label></section>
+    <section><small id="component-id"></small><h2>部件 · <span id="selected">前翼</span></h2><select id="part" aria-label="选择赛车部件"></select><div id="detail"></div><p><small>说明为静态草稿，待人工审核；当前规格与升级信息：暂无。</small></p><label class="check"><input id="wire" type="checkbox">线框模式</label><label class="check"><input id="labels" type="checkbox" checked>显示连线标注</label></section>
     <section><h2>视角与手感</h2><label for="yaw">水平角度<output id="yawOut"></output></label><input id="yaw" type="range" min="-180" max="180" step="1"><label for="pitch">俯仰角度<output id="pitchOut"></output></label><input id="pitch" type="range" min="-80" max="89" step="1"><label for="zoom">缩放<output id="zoomOut"></output></label><input id="zoom" type="range" min="0.5" max="3" step="0.05"><label for="speed">旋转灵敏度<output id="speedOut"></output></label><input id="speed" type="range" min="0.2" max="2" step="0.1" value="1"></section>
     <section><h2>记录调试参数</h2><button id="export">生成参数</button><p><small>复制下面的参数发给我，即可按这个视角继续调整。</small></p><textarea id="settings" readonly aria-label="当前调试参数"></textarea></section>
   </aside></div>
 </main>
+<style>
+ .identity{display:flex;gap:24px;align-items:end;justify-content:space-between}.identity select{width:min(420px,100%)}.identity>div{min-width:0;flex:1}.identity label{margin:0;font-size:13px}a{color:#b42318}a:focus-visible{outline:3px solid #b42318}button[aria-pressed=true]{border-color:#202124;background:#202124;color:white}#detail h3{font-size:13px;margin:18px 0 4px}#detail p{font-size:14px}#component-id{font:12px monospace}aside section{margin-bottom:16px}#availability{font-size:13px}canvas{height:560px}details summary{cursor:pointer;min-height:44px}@media(max-width:800px){canvas{height:390px}.tag{font-size:11px;left:12px}aside{display:block}.identity{align-items:center}h1{font-size:26px}}
+</style>
 <script>
 'use strict';
-const parts = [
- ['前翼',0,.18,-2.35,2,.12,.45],['鼻锥',0,.42,-1.5,.35,.3,1.35],
- ['前悬架',0,.4,-1.35,1.65,.08,.25],['前轮',-.95,.42,-1.35,.42,.8,.75],['前轮',.95,.42,-1.35,.42,.8,.75],
- ['侧箱',-.48,.48,.2,.5,.4,1.45],['侧箱',.48,.48,.2,.5,.4,1.45],['底板',0,.16,.25,1.65,.08,2.55],
- ['引擎盖',0,.75,.7,.42,.6,1.2],['动力单元',0,.42,.9,.5,.35,.65],['后悬架',0,.4,1.55,1.65,.08,.25],
- ['后轮',-.95,.45,1.55,.5,.85,.85],['后轮',.95,.45,1.55,.5,.85,.85],['梁翼',0,.5,2,1.25,.1,.3],['尾翼',0,1.1,2,1.6,.16,.5]
-];
+// Independent meshes and anchors. These are illustration mesh IDs, not database primary keys.
+const components = [
+ ['front_wing','前翼',[0,.22,-2.18],'赛车前端的多层翼面。','引导前端气流，并产生前部下压力。','影响前轴抓地与整车空气动力平衡。'],
+ ['nose','鼻锥',[0,.48,-1.35],'位于座舱前方的细长车身结构。','连接前部车身，并影响周围气流路径。','形状与前翼、底盘布局相互关联。'],
+ ['front_suspension','前悬架',[-.65,.42,-1.35],'连接前轮与底盘的连杆系统。','约束车轮运动并传递载荷。','影响轮胎接地与车身姿态。'],
+ ['front_wheels','前轮',[-1,.43,-1.35],'前轮轮胎与轮辋总成。','承担转向、制动和横向力传递。','抓地表现受温度、胎压和磨损等因素影响。'],
+ ['halo','Halo',[0,.96,-.35],'围绕车手头部的保护结构。','提供额外的驾驶舱防护。','是安全结构，不是内部动力部件。'],
+ ['cockpit','座舱',[0,.68,-.25],'容纳车手的驾驶空间。','提供驾驶操作与车手约束系统的布置空间。','布局需要兼顾安全与操作需求。'],
+ ['sidepods','侧箱',[.64,.48,.2],'座舱两侧的车身区域。','容纳冷却相关部件并组织外部气流。','冷却需求与空气动力设计需要共同考虑。'],
+ ['floor','底板',[.76,.15,.68],'车体下部的大面积结构。','参与产生下压力并组织车底气流。','其效果与离地高度和周边流动有关。'],
+ ['engine_cover','引擎盖',[0,.78,.78],'覆盖座舱后方动力区域的外部车身。','包覆内部区域并塑造外部气流。','外形受冷却和内部布置约束；本模型不展示内部机械。'],
+ ['rear_suspension','后悬架',[.66,.43,1.55],'连接后轮与车体的连杆系统。','传递载荷并约束后轮运动。','与牵引、轮胎接地和车身姿态相关。'],
+ ['rear_wheels','后轮',[1,.45,1.55],'后轮轮胎与轮辋总成。','向赛道传递驱动力、制动力和横向力。','温度、磨损和载荷会影响可用抓地力。'],
+ ['beam_wing','梁翼',[0,.45,1.94],'位于尾翼下方的翼面。','参与组织车尾气流。','具体形态取决于技术规则及赛车设计。'],
+ ['rear_wing','尾翼',[0,1.04,2.03],'赛车后部上方的翼面组件。','产生后部下压力，同时带来阻力。','其设计需要平衡弯道抓地与直线表现。']
+].map(([id,name,anchor,what,does,why])=>({id,name,anchor,what,does,why,review:'pending',faces:[]}));
+const materials={neutral:{body:'#a6afb5',secondary:'#d8dde0',carbon:'#34393e',accent:'#b42318'},ferrari:{body:'#bd2925',secondary:'#d64a36',carbon:'#303337',accent:'#e2bf56'},mclaren:{body:'#e77723',secondary:'#f39c48',carbon:'#303337',accent:'#d5d9dc'},mercedes:{body:'#aebbbd',secondary:'#d6dfe0',carbon:'#303337',accent:'#39a899'},redbull:{body:'#293952',secondary:'#364d6a',carbon:'#262c34',accent:'#dcad35'}};
+const mesh=id=>components.find(c=>c.id===id);
+function face(id,points,material='body'){mesh(id).faces.push({points,material});}
+// Loft cross-sections: [z, centerX, centerY, halfWidth, halfHeight].
+function loft(id,sections,material='body',segments=8){
+ const rings=sections.map(([z,x,y,w,h])=>Array.from({length:segments},(_,i)=>{const a=2*Math.PI*i/segments;return [x+w*Math.cos(a),y+h*Math.sin(a),z]}));
+ face(id,[...rings[0]].reverse(),material);face(id,rings.at(-1),material);
+ for(let j=1;j<rings.length;j++)for(let i=0;i<segments;i++)face(id,[rings[j-1][i],rings[j-1][(i+1)%segments],rings[j][(i+1)%segments],rings[j][i]],material);
+}
+function rod(id,a,b,r=.025,material='carbon'){
+ const d=b.map((v,i)=>v-a[i]),len=Math.hypot(...d),n=d.map(v=>v/len),ref=Math.abs(n[1])<.9?[0,1,0]:[1,0,0];
+ const u=[n[1]*ref[2]-n[2]*ref[1],n[2]*ref[0]-n[0]*ref[2],n[0]*ref[1]-n[1]*ref[0]],ul=Math.hypot(...u);for(let i=0;i<3;i++)u[i]/=ul;
+ const v=[n[1]*u[2]-n[2]*u[1],n[2]*u[0]-n[0]*u[2],n[0]*u[1]-n[1]*u[0]],rings=[a,b].map(p=>Array.from({length:6},(_,j)=>p.map((x,i)=>x+r*(u[i]*Math.cos(j*Math.PI/3)+v[i]*Math.sin(j*Math.PI/3)))));
+ for(let i=0;i<6;i++)face(id,[rings[0][i],rings[0][(i+1)%6],rings[1][(i+1)%6],rings[1][i]],material);
+ face(id,rings[0],material);face(id,rings[1],material);
+}
+function wheel(id,x,y,z,w,r){
+ const rings=[[-w/2,.86],[-w*.36,1],[w*.36,1],[w/2,.86]].map(([dx,k])=>Array.from({length:20},(_,i)=>[x+dx,y+r*k*Math.sin(i*Math.PI/10),z+r*k*Math.cos(i*Math.PI/10)]));
+ for(let j=1;j<rings.length;j++)for(let i=0;i<20;i++)face(id,[rings[j-1][i],rings[j-1][(i+1)%20],rings[j][(i+1)%20],rings[j][i]],'tyre');
+ for(const dx of [-w/2,w/2]){const outer=Array.from({length:20},(_,i)=>[x+dx,y+r*.86*Math.sin(i*Math.PI/10),z+r*.86*Math.cos(i*Math.PI/10)]),inner=outer.map(p=>[p[0],y+(p[1]-y)*.64,z+(p[2]-z)*.64]);for(let i=0;i<20;i++)face(id,[outer[i],outer[(i+1)%20],inner[(i+1)%20],inner[i]],'tyre');face(id,inner,'hub');}
+}
+for(const s of [-1,1]){
+ wheel('front_wheels',s*.96,.43,-1.36,.37,.41);wheel('rear_wheels',s*.98,.45,1.52,.46,.43);
+ for(const [id,z] of [['front_suspension',-1.36],['rear_suspension',1.52]])for(const y of [.29,.52])for(const dz of [-.28,.28])rod(id,[s*.2,y,z+dz],[s*.91,.42,z],.018);
+ loft('sidepods',[[-.52,s*.49,.44,.27,.19],[-.22,s*.55,.49,.28,.2],[.35,s*.56,.43,.25,.17],[.95,s*.39,.32,.17,.1],[1.22,s*.3,.27,.08,.06]]);
+ loft('cockpit',[[-.9,s*.23,.54,.09,.1],[-.55,s*.32,.63,.075,.1],[.1,s*.3,.63,.075,.1],[.32,s*.2,.58,.11,.1]]);
+ loft('rear_wing',[[1.73,s*.76,.83,.035,.27],[2.19,s*.76,.86,.035,.28]],'body',4);
+ loft('front_wing',[[-2.53,s*.97,.23,.035,.13],[-2.0,s*.97,.29,.035,.14]],'body',4);
+ rod('halo',[0,.95,-.64],[s*.33,.94,-.3],.038);rod('halo',[s*.33,.94,-.3],[s*.3,.84,.14],.038);rod('halo',[s*.3,.84,.14],[s*.25,.65,.23],.035);
+}
+rod('halo',[0,.57,-.77],[0,.95,-.64],.04);
+loft('nose',[[-2.25,0,.31,.07,.055],[-1.7,0,.4,.12,.095],[-1.12,0,.49,.2,.14],[-.7,0,.51,.27,.15]]);
+loft('cockpit',[[-.65,0,.52,.23,.03],[.27,0,.52,.24,.03]],'carbon');
+loft('engine_cover',[[.18,0,.77,.19,.34],[.48,0,.76,.22,.34],[1.04,0,.54,.19,.18],[1.65,0,.31,.1,.055]]);
+loft('floor',[[-.77,0,.16,.58,.025],[-.35,0,.16,.85,.025],[.82,0,.16,.81,.025],[1.8,0,.23,.55,.025]],'carbon');
+for(let i=0;i<3;i++)loft('front_wing',[[-2.5+i*.16,0,.18+i*.045,.88,.018],[-2.37+i*.16,0,.21+i*.045,.93,.018]],i===2?'accent':'carbon');
+for(let i=0;i<2;i++)loft('rear_wing',[[1.81+i*.16,0,1+i*.1,.73,.022],[1.99+i*.16,0,1.05+i*.1,.73,.025]],i?'body':'carbon');
+loft('beam_wing',[[1.77,0,.41,.63,.02],[2.04,0,.48,.63,.02]],'carbon');
+rod('rear_wing',[-.18,.3,1.75],[-.18,1.04,1.99]);rod('rear_wing',[.18,.3,1.75],[.18,1.04,1.99]);
 const $ = id => document.getElementById(id), canvas=$('car'), ctx=canvas.getContext('2d');
-const state={yaw:-.65,pitch:.55,zoom:1,speed:1,part:'前翼',focus:false,wire:false,labels:true};
+const state={yaw:-.65,pitch:.55,zoom:1,speed:1,part:'front_wing',team:'neutral',wire:false,labels:true};
 let width=1,height=1,faces=[];
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const wrap=v=>Math.atan2(Math.sin(v),Math.cos(v));
-for(const name of new Set(parts.map(p=>p[0]))) $('part').add(new Option(name,name));
+for(const c of components) $('part').add(new Option(c.name,c.id));
 function project(x,y,z){
- const p=parts.find(p=>p[0]===state.part);
- y-=state.focus?p[2]:.45;if(state.focus)z-=p[3];
+ y-=.45;
  const rx=x*Math.cos(state.yaw)+z*Math.sin(state.yaw),rz=z*Math.cos(state.yaw)-x*Math.sin(state.yaw);
  const ry=y*Math.cos(state.pitch)-rz*Math.sin(state.pitch),depth=y*Math.sin(state.pitch)+rz*Math.cos(state.pitch);
  const scale=Math.min(width/6,height/5)*state.zoom;
@@ -43,35 +96,59 @@ function project(x,y,z){
 }
 function draw(){
  ctx.clearRect(0,0,width,height);faces=[];
- for(const p of parts){
-  if(state.focus&&p[0]!==state.part)continue;
-  const pts=[];
-  for(const z of [-1,1])for(const y of [-1,1])for(const x of [-1,1])pts.push(project(p[1]+x*p[4]/2,p[2]+y*p[5]/2,p[3]+z*p[6]/2));
-  [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]].forEach((ids,side)=>{
-   const path=new Path2D();ids.forEach((i,j)=>j?path.lineTo(pts[i].x,pts[i].y):path.moveTo(pts[i].x,pts[i].y));path.closePath();
-   faces.push({path,side,name:p[0],depth:ids.reduce((s,i)=>s+pts[i].depth,0)/4});
-  });
+ for(const c of components){
+  for(const f of c.faces){
+   const pts=f.points.map(p=>project(...p)),path=new Path2D();pts.forEach((p,j)=>j?path.lineTo(p.x,p.y):path.moveTo(p.x,p.y));path.closePath();
+   const a=f.points[0],b=f.points[1],d=f.points[2],u=b.map((v,i)=>v-a[i]),v=d.map((v,i)=>v-a[i]),n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],len=Math.hypot(...n)||1;
+   const light=.64+.32*Math.abs((n[0]*.35+n[1]*.85+n[2]*.4)/len);
+   faces.push({path,light,material:f.material,name:c.id,depth:pts.reduce((s,p)=>s+p.depth,0)/pts.length});
+  }
  }
  faces.sort((a,b)=>a.depth-b.depth);
  for(const f of faces){
-  const selected=f.name===state.part,tyre=f.name.endsWith('轮');
-  ctx.fillStyle=selected?`hsl(5 65% ${43-f.side*2}%)`:tyre?`hsl(210 5% ${28-f.side}%)`:`hsl(210 8% ${85-f.side*3}%)`;
+  const selected=f.name===state.part,palette=materials[state.team],hex=selected?'#b42318':f.material==='tyre'?'#303338':f.material==='hub'?'#707980':palette[f.material];
+  const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)*f.light);
+  ctx.fillStyle=`rgb(${rgb.map(v=>Math.round(selected?v:v*.82+255*.18)).join(',')})`;
   if(!state.wire)ctx.fill(f.path);
-  ctx.strokeStyle=selected?'#8c1c13':'#6c747c';ctx.lineWidth=state.wire?1:.7;ctx.stroke(f.path);
+  ctx.strokeStyle=state.wire?(selected?'#b42318':'#747b80'):ctx.fillStyle;ctx.lineWidth=state.wire?.6:.45;ctx.stroke(f.path);
  }
  if(state.labels){
-  const p=parts.find(p=>p[0]===state.part),a=project(p[1],p[2],p[3]);
-  ctx.strokeStyle='#b42318';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(28,height-35);ctx.stroke();
-  ctx.fillStyle='#b42318';ctx.beginPath();ctx.arc(a.x,a.y,3,0,Math.PI*2);ctx.fill();
-  ctx.font='15px system-ui';ctx.fillStyle='white';ctx.fillRect(20,height-51,ctx.measureText(state.part).width+16,29);ctx.fillStyle='#b42318';ctx.fillText(state.part,28,height-31);
+  drawLabels();
  }
  for(const k of ['yaw','pitch','zoom','speed']){
   const degrees=k==='yaw'||k==='pitch',value=degrees?state[k]*180/Math.PI:state[k];
   $(k).value=value;$(k+'Out').value=degrees?Math.round(value)+'°':value.toFixed(2)+'×';
  }
- $('selected').textContent=state.part;$('part').value=state.part;
- $('status').textContent='已选择：'+state.part+(state.part==='动力单元'?' · 内部部件可使用“单独查看”':'');
+ const c=mesh(state.part);$('selected').textContent=c.name;$('part').value=c.id;$('component-id').textContent=c.id;
+ if($('detail').dataset.part!==c.id){$('detail').dataset.part=c.id;$('detail').replaceChildren();for(const [title,body] of [['是什么',c.what],['有什么作用',c.does],['为什么重要',c.why]]){const h=document.createElement('h3'),p=document.createElement('p');h.textContent=title;p.textContent=body;$('detail').append(h,p);} $('status').textContent='已选择：'+c.name;}
 }
+let labelBoxes=[];
+function drawLabels(){
+ const priorities=[state.part,'front_wing','rear_wing','sidepods','halo','floor','front_wheels'],limit=width<500?3:6;
+ const candidates=[...new Set(priorities)].map(id=>({...mesh(id),screen:project(...mesh(id).anchor)})).filter(c=>c.screen.x>8&&c.screen.x<width-8&&c.screen.y>40&&c.screen.y<height-25).slice(0,limit);
+ labelBoxes=[];ctx.font='12px system-ui';
+ for(const side of [-1,1]){
+  const list=candidates.filter(c=>(c.screen.x<width/2?-1:1)===side).sort((a,b)=>a.screen.y-b.screen.y);
+  let previous=50;
+  for(let i=0;i<list.length;i++){
+   const c=list[i],tw=ctx.measureText(c.name).width,y=clamp(c.screen.y,previous,height-28-(list.length-1-i)*32),x=side<0?12:width-12-tw;
+   previous=y+32;const edge=side<0?x+tw+6:x-6;
+   ctx.strokeStyle=c.id===state.part?'#b42318':'#83898d';ctx.lineWidth=.75;ctx.beginPath();ctx.moveTo(c.screen.x,c.screen.y);ctx.lineTo(edge+(side<0?12:-12),y-4);ctx.lineTo(edge,y-4);ctx.stroke();
+   ctx.fillStyle='white';ctx.fillRect(x-4,y-18,tw+8,24);ctx.fillStyle=c.id===state.part?'#b42318':'#50575c';ctx.fillText(c.name,x,y);ctx.beginPath();ctx.arc(c.screen.x,c.screen.y,2,0,Math.PI*2);ctx.fill();
+   labelBoxes.push({id:c.id,x:x-4,y:y-18,width:tw+8,height:24});
+  }
+ }
+}
+// Only source-verified identity records; no invented specification/component variants.
+const carModels=[{car_model_id:'prototype_ferrari_sf23',team:'ferrari',name:'SF-23',season:2023,base_3d_model_id:null,official_url:'https://www.ferrari.com/en-US/formula1/sf-23'}];
+function updateGeneration(){
+ $('generation').replaceChildren(new Option('通用技术示意 · 非真实车型','generic'));
+ for(const c of carModels.filter(c=>c.team===state.team))$('generation').add(new Option(`${c.season} / ${c.name} · 几何待建模`,c.car_model_id));
+ $('official').hidden=true;$('official').removeAttribute('href');$('availability').textContent=state.team==='neutral'?'当前展示通用结构，不对应车队、赛季或比赛规格。':'当前仅预览车队风格配色，非官方完整涂装；无已验证几何的车型不会加载虚构差异。';
+}
+document.querySelectorAll('[data-team]').forEach(b=>b.addEventListener('click',()=>{state.team=b.dataset.team;document.querySelectorAll('[data-team]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));updateGeneration();draw();}));
+$('generation').addEventListener('change',()=>{const c=carModels.find(c=>c.car_model_id===$('generation').value);$('official').hidden=!c;if(c){$('official').href=c.official_url;$('availability').textContent=`${c.season} ${c.name}：仅核验车型身份与官方链接。专属几何、比赛规格尚未提供；下方仍为明确标识的通用示意。`;}else{updateGeneration();}});
+updateGeneration();
 new ResizeObserver(()=>{
  const r=canvas.getBoundingClientRect();width=r.width;height=r.height;const dpr=Math.min(devicePixelRatio||1,2);
  canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);draw();
@@ -95,9 +172,9 @@ for(const name of ['pointercancel','lostpointercapture'])canvas.addEventListener
 canvas.addEventListener('wheel',e=>{e.preventDefault();state.zoom=clamp(state.zoom*Math.exp(-e.deltaY*.001),.5,3);draw();},{passive:false});
 canvas.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-'].includes(e.key))return;e.preventDefault();if(e.key==='ArrowLeft')state.yaw=wrap(state.yaw-.1);if(e.key==='ArrowRight')state.yaw=wrap(state.yaw+.1);if(e.key==='ArrowUp')state.pitch=clamp(state.pitch+.1,-1.39,1.55);if(e.key==='ArrowDown')state.pitch=clamp(state.pitch-.1,-1.39,1.55);if(['+','='].includes(e.key))state.zoom=clamp(state.zoom+.1,.5,3);if(e.key==='-')state.zoom=clamp(state.zoom-.1,.5,3);draw();});
 for(const k of ['yaw','pitch','zoom','speed'])$(k).addEventListener('input',()=>{state[k]=Number($(k).value)*(k==='yaw'||k==='pitch'?Math.PI/180:1);draw();});
-for(const k of ['focus','wire','labels'])$(k).addEventListener('change',()=>{state[k]=$(k).checked;draw();});
+for(const k of ['wire','labels'])$(k).addEventListener('change',()=>{state[k]=$(k).checked;draw();});
 $('part').addEventListener('change',()=>{state.part=$('part').value;draw();});
-document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{const views={default:[-.65,.55],front:[Math.PI,.12],rear:[0,.12],side:[Math.PI/2,.12],top:[0,Math.PI/2-.01]};[state.yaw,state.pitch]=views[b.dataset.view];state.zoom=1;state.focus=false;$('focus').checked=false;draw();}));
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{const views={default:[-.65,.55],front:[Math.PI,.12],rear:[0,.12],side:[Math.PI/2,.12],top:[0,Math.PI/2-.01]};[state.yaw,state.pitch]=views[b.dataset.view];state.zoom=1;draw();}));
 $('export').addEventListener('click',()=>{$('settings').value=JSON.stringify({...state,yawDegrees:state.yaw*180/Math.PI,pitchDegrees:state.pitch*180/Math.PI},null,2);});
 </script>
 </html>
