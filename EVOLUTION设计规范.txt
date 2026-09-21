@@ -1,0 +1,1182 @@
+你现在需要重新设计并实现 GrandPrixReminder 的 Evolution（赛车演进）界面。
+
+在开始修改代码前：
+
+1. 先阅读项目现有的 development.md、DATA_ARCHITECTURE.md、design.md（如果存在）以及 Evolution/3D 相关现有代码。
+2. 检查当前项目结构、数据模型、3D Renderer 和交互实现。
+3. 如果项目中存在 frontend / uiux 等相关 Skill，请优先调用这些 Skill 辅助分析和实现。
+4. 不要直接推翻现有实现。优先复用已有组件、数据层、路由和交互逻辑。
+5. 当前 3D Prototype 的拖拽旋转手感已经确认满意，禁止重新设计 Rotation Interaction。替换模型、Renderer 或 UI 时必须尽可能保持当前旋转、缩放的操作手感。
+6. 先给出简短实施方案，确认哪些现有模块可以复用，再开始修改。
+
+==================================================
+一、PRODUCT GOAL
+==================================================
+
+Evolution 不是普通的“赛车 3D 展示器”。
+
+它的核心目标是让普通 F1 车迷直观理解：
+
+1. 一台 F1 赛车由哪些主要部件组成；
+2. 每个部件有什么作用；
+3. 同一车队不同代际赛车发生了什么变化；
+4. 同一辆赛车在一个赛季中发生了哪些重要升级；
+5. 用户能够通过 3D 交互直接看到这些变化发生在哪里。
+
+最终体验应接近：
+
+Interactive F1 Engineering Archive
+
+而不是：
+
+- 3D 游戏
+- CAD 查看器
+- F1 数据 Dashboard
+- 新闻页面
+- 复杂工程仿真软件
+
+整体继续符合 GrandPrixReminder：
+
+Race. Debrief. Evolution.
+
+==================================================
+二、DESIGN LANGUAGE
+==================================================
+
+整体视觉方向：
+
+Minimal / Motorsport / Technical / Premium
+
+参考苹果官网、现代工业设计网站、汽车 Configurator 和工程产品展示页的克制感。
+
+主要使用：
+
+- 白色 / 浅灰背景
+- 大量留白
+- 黑色 / 深灰文字
+- 极少量强调色
+- 车队颜色作为局部视觉识别
+- 细分隔线
+- 清晰 Typography Hierarchy
+- 轻量阴影
+- 精确对齐
+- 大面积 3D 内容区域
+
+禁止：
+
+- AI 紫色/蓝色渐变
+- Neon
+- Glow
+- Cyberpunk HUD
+- 大量半透明玻璃组件
+- 到处都是圆角 Card
+- 每个区域都加边框
+- 大面积渐变
+- Emoji 式技术标签
+- 密集 Dashboard
+- 过度动画
+- 为“科技感”增加没有功能意义的装饰
+
+科技感应该来自：
+
+3D 空间运动
++
+赛车拆解
++
+部件关系
++
+信息层级
++
+演进对比
+
+而不是 RGB / HUD / Glow。
+
+==================================================
+三、INFORMATION ARCHITECTURE
+==================================================
+
+Evolution 使用明确的层级：
+
+LEVEL 1
+TEAM
+
+↓
+
+LEVEL 2
+CAR GENERATION
+
+↓
+
+LEVEL 3
+CAR EXPLORER
+
+↓
+
+LEVEL 4
+IN-SEASON EVOLUTION
+
+Compare 是 Mode，不是第五层页面。
+
+用户应该能够完成两种 Evolution：
+
+A. Generation Evolution
+
+例如：
+
+RB18 → RB19 → RB20 → RB21
+
+B. In-Season Evolution
+
+例如：
+
+RB20 Launch
+→ Japanese GP Spec
+→ British GP Spec
+→ Later Spec
+
+不要把跨代变化和赛季内升级混在一条时间线上。
+
+==================================================
+四、TEAM SELECTION
+==================================================
+
+Evolution 首页首先选择车队。
+
+例如：
+
+Red Bull Racing
+Ferrari
+Mercedes
+McLaren
+Aston Martin
+Alpine
+Williams
+Haas
+etc.
+
+页面保持简单。
+
+不要设计成巨大的筛选 Dashboard。
+
+点击车队后进入该车队的 Generation 页面。
+
+车队颜色可以作为小面积 Accent，但不要让整个 UI 跟着车队颜色变化。
+
+==================================================
+五、GENERATION SELECTION
+==================================================
+
+进入车队后，展示该车队不同赛车代际。
+
+例如 Red Bull：
+
+RB18
+RB19
+RB20
+RB21
+...
+
+推荐采用横向 Generation Rail：
+
+RB18 ───── RB19 ───── RB20 ───── RB21
+2022       2023       2024       2025
+                       ●
+
+或者在小屏幕下使用简洁的纵向列表。
+
+核心原则：
+
+赛车本身是视觉主体，
+Generation Selector 是导航，
+不要让 Selector 抢占过多屏幕。
+
+选择 RB20 后进入 RB20 Car Explorer。
+
+历史赛车未来可能很多，因此 Generation UI 必须支持扩展，不得假定只有 3～4 台赛车。
+
+可以保留 Heritage 入口用于未来查看更长的车队赛车历史。
+
+==================================================
+六、3D MODEL POSITIONING
+==================================================
+
+取消此前高模方案。
+
+3D 赛车采用：
+
+Refined Low-Poly / Lightweight Realtime Model
+
+精细程度参考已经提供的 Sketchfab Low Poly F1 赛车截图。
+
+不要追求：
+
+- F1 游戏级高模
+- CAD 精度
+- 毫米级空气动力学细节
+- 完整动力单元
+- 内部机械结构
+- 螺丝
+- 管线
+- 传感器
+- 极端细小导流结构
+
+但必须明显优于当前方块/Cuboid Prototype。
+
+用户在手机正常观察距离应该能够清楚识别：
+
+- Front Wing
+- Nose
+- Front Suspension
+- Front Wheels
+- Halo
+- Cockpit
+- Sidepods
+- Floor
+- Engine Cover
+- Rear Suspension
+- Rear Wheels
+- Beam Wing
+- Rear Wing
+
+重点是：
+
+轮廓正确
++
+结构清晰
++
+适合交互
++
+轻量运行
+
+而不是几何复杂度。
+
+==================================================
+七、UNIVERSAL F1 MODEL
+==================================================
+
+不要为每个车队、每个赛季完全重新建立一套独立模型体系。
+
+采用：
+
+Universal F1 Base Architecture
++
+Team Material / Livery
++
+Generation Component Configuration
+
+逻辑：
+
+Universal F1 Model
+
+├── Shared Structure
+├── Component IDs
+├── Interaction Anchors
+├── Materials
+├── Team Theme
+└── Replaceable Components
+
+车队之间首先通过：
+
+- Primary Color
+- Secondary Color
+- Carbon Areas
+- Accent
+- Material
+
+形成视觉区别。
+
+例如：
+
+Red Bull：
+深色主体 + 红/黄 Accent
+
+Ferrari：
+红色主体 + Carbon
+
+Mercedes：
+银 / 黑
+
+McLaren：
+橙 + 黑
+
+第一阶段不需要精确复制 Sponsor Logo 和官方完整 Livery。
+
+不要因为颜色不同复制整个模型文件。
+
+==================================================
+八、GENERATION DIFFERENCE
+==================================================
+
+不同代际不能只是：
+
+RB19 = 换名字
+RB20 = 换名字
+
+但是也不要整车重新建模。
+
+使用 Replaceable Components。
+
+例如：
+
+RB19
+├── base_car
+├── front_wing_RB19
+├── sidepod_RB19
+├── floor_RB19
+└── engine_cover_RB19
+
+RB20
+├── base_car
+├── front_wing_RB20
+├── sidepod_RB20
+├── floor_RB20
+└── engine_cover_RB20
+
+只对：
+
+肉眼可观察
++
+技术意义明显
++
+有可靠资料支持
+
+的部件制作差异。
+
+不要为了“看起来不同”而虚构结构差异。
+
+不同技术规则时代允许创建新的 Base Architecture。
+
+不要强行让所有历史 F1 赛车共享完全相同的几何底模。
+
+==================================================
+九、COMPONENT STRUCTURE
+==================================================
+
+即使使用 Low-Poly，主要部件必须是独立可寻址 Mesh。
+
+禁止：
+
+car.glb
+└── car_mesh
+
+推荐至少：
+
+car
+├── front_wing
+├── nose
+├── front_suspension
+├── front_wheels
+├── halo
+├── cockpit
+├── sidepods
+├── floor
+├── engine_cover
+├── rear_suspension
+├── rear_wheels
+├── beam_wing
+└── rear_wing
+
+所有重要 Mesh 使用稳定 Component ID。
+
+Component ID 必须能够被：
+
+Highlight
+Focus
+Exploded View
+Component Info
+Evolution
+Compare
+
+共同使用。
+
+不要为不同功能创建互不兼容的部件命名体系。
+
+==================================================
+十、CAR EXPLORER
+==================================================
+
+Car Explorer 是 Evolution 的核心页面。
+
+布局优先级：
+
+1. 赛车名称
+2. Season
+3. 大面积 3D 赛车
+4. Component Labels
+5. Interaction Controls
+6. Generation / Evolution Navigation
+
+例如：
+
+Red Bull Racing › RB20
+
+RB20
+2024
+
+                         Official Car ↗
+
+              [ LARGE 3D CAR ]
+
+Front Wing ───────╲       ╱──── Rear Wing
+Suspension ────────╲     ╱──── Engine Cover
+                     CAR
+Floor ─────────────╱     ╲──── Sidepod
+
+
+Rotate   Deconstruct   Technical
+
+
+RB19 ───────── RB20 ───────── RB21
+                 ●
+
+              Season Evolution
+
+3D 赛车应该是页面最大的视觉主体。
+
+不要让说明 Card 把赛车压缩成一个小窗口。
+
+==================================================
+十一、ROTATION / CAMERA
+==================================================
+
+当前 Prototype 的 Rotation Interaction 已经确认满意。
+
+禁止重新设计旋转手感。
+
+继续支持：
+
+- Drag Rotate
+- Wheel / Pinch Zoom
+- Click Component
+- Reset
+- Front
+- Side
+- Top
+- Rear
+
+可以优化动画过渡，但不要改变基本控制逻辑。
+
+Camera Transition 应：
+
+- Smooth
+- Short
+- Predictable
+
+不要：
+
+- 弹性过强
+- 大幅 overshoot
+- 电影式长动画
+- 自动不停旋转
+
+==================================================
+十二、COMPONENT LABEL SYSTEM
+==================================================
+
+删除当前所有 Label 指向左下角的实现。
+
+改为：
+
+Dynamic Technical Callout Layout
+
+标签围绕赛车自然分布。
+
+例如：
+
+Front Wing ─────╲             ╱──── Rear Wing
+
+Suspension ──────╲           ╱──── Engine Cover
+
+                   3D CAR
+
+       Floor ─────╱           ╲──── Sidepod
+
+Label Placement 根据：
+
+3D Anchor
+→ Screen Projection
+→ Available Screen Region
+
+动态计算。
+
+赛车旋转/缩放后重新计算。
+
+要求：
+
+- 尽量避免 Label 重叠
+- 避免文字被连接线穿过
+- 尽量减少 Line Crossing
+- 尽量避免连接线穿过整辆赛车
+- 标签保持短
+- 使用细线
+- 不使用巨型 Card
+- 不使用 Neon
+- 不使用游戏 HUD
+
+当空间不足时允许减少非重要标签，而不是强行显示全部标签。
+
+==================================================
+十三、COMPONENT SELECTION
+==================================================
+
+用户点击赛车部件：
+
+1. Highlight Selected Component
+2. De-emphasize Other Components
+3. Camera 可进行轻微 Focus
+4. 显示 Component Detail
+
+不要只显示：
+
+“已选择：Front Wing”
+
+Component Detail 使用：
+
+Component
+├── What is it?
+├── What does it do?
+├── Why does it matter?
+└── Evolution / Current Specification
+
+例如 Tyre：
+
+Tyre
+
+What is it?
+赛车与赛道直接接触的部件。
+
+What does it do?
+负责传递纵向和横向力。
+
+Key Factors
+- Compound
+- Temperature
+- Wear
+- Pressure
+
+Evolution
+显示当前车型/当前规格相关变化。
+
+基础 Component Knowledge 必须来自人工审核的静态知识库。
+
+不要每次点击部件调用 LLM。
+
+AI 只用于有来源的动态升级信息、采访提炼等场景。
+
+==================================================
+十四、FOCUS MODE
+==================================================
+
+改进现有 Focus。
+
+不要简单：
+
+Selected Part Visible
++
+Everything Else Hidden
+
+改成：
+
+Selected Component
+→ Slightly separated / emphasized
+
+Other Car Components
+→ Reduced opacity / desaturated
+
+必要时：
+
+Selected Component
+→ Small controlled rotation
+
+让用户仍然能够理解部件原本位于赛车什么位置。
+
+==================================================
+十五、EXPLODED VIEW
+==================================================
+
+提供：
+
+Deconstruct
+
+点击后进入 Exploded View。
+
+赛车主要部件沿合理方向平滑分离。
+
+例如：
+
+                   Rear Wing
+                       ↑
+
+Front Wheel ←        CAR        → Rear Wheel
+
+Front Wing  ←                   → Engine Cover
+
+                    Floor
+                      ↓
+
+重点：
+
+Spatial Relationship
++
+Animation
++
+Component Selection
+
+不是机械工程爆炸图。
+
+不要制作不存在或无法可靠确认的内部结构。
+
+Exploded 状态下：
+
+- 所有主要 Component 仍然可以点击
+- Label 仍然工作
+- Component Detail 仍然工作
+
+提供：
+
+Assemble
+
+平滑恢复原位。
+
+==================================================
+十六、TECHNICAL / LIVERY VIEW
+==================================================
+
+至少考虑两个视觉模式：
+
+Livery
+Technical
+
+Livery：
+显示车队配色。
+
+Technical：
+降低车队视觉干扰，
+使用 Neutral Grey / Carbon / Engineering Material，
+突出结构、边缘和部件关系。
+
+X-Ray 暂时不要作为核心功能。
+
+只有未来拥有可靠内部模型后才实现真正 X-Ray。
+
+禁止为了视觉效果虚构赛车内部结构。
+
+==================================================
+十七、OFFICIAL CAR
+==================================================
+
+不建立 Reference Image Gallery。
+
+不下载、缓存、维护赛车参考图片。
+
+Car Explorer 右上角提供一个非常轻量的：
+
+Official Car ↗
+
+点击使用系统浏览器打开当前赛车对应官方页面。
+
+URL 优先级：
+
+1. Team Official Car Page
+2. Team Official Historical/Launch Page
+3. Formula1.com Official Page
+4. 没有可靠官方来源 → 不显示按钮
+
+不要为了保证按钮存在而跳：
+
+- Google Image Search
+- Wikipedia
+- 随机 Motorsport 网站
+
+数据模型只保存：
+
+official_url
+
+==================================================
+十八、IN-SEASON EVOLUTION
+==================================================
+
+同一车型下面提供：
+
+Season Evolution
+
+例如：
+
+RB20
+
+Launch ─ BHR ─ JPN ─ MIA ─ GBR ─ ...
+
+但不要让每一站都看起来像发生了升级。
+
+普通比赛：
+
+small neutral tick
+
+存在重要升级：
+
+highlighted event
+
+例如：
+
+───┬────●────┬────●────
+  BHR   JPN        GBR
+        ↑           ↑
+      Floor      Front Wing
+
+点击 JPN：
+
+Japanese Grand Prix
+Suzuka · 2024
+
+Floor Update
+
+Change
+...
+
+Goal
+...
+
+Expected Effect
+...
+
+Status
+Introduced / Tested / Retained / Modified / Removed / Unknown
+
+然后：
+
+3D 模型自动 Highlight 对应部件。
+
+如果存在不同 specification，则切换到对应 Component Configuration。
+
+==================================================
+十九、GENERATION COMPARE
+==================================================
+
+Compare 是 Mode，不是独立信息层级。
+
+同一个 Compare Engine 支持：
+
+RB19 ↔ RB20
+
+以及：
+
+RB20 Launch ↔ RB20 British GP Spec
+
+推荐视觉：
+
+LEFT
+Previous Specification
+
+RIGHT
+Current Specification
+
+或者：
+
+Ghost Compare
+
+Previous:
+Semi-transparent
+
+Current:
+Solid
+
+差异 Component：
+Highlighted
+
+允许按部件切换：
+
+Overall
+Front Wing
+Sidepod
+Floor
+Rear Wing
+etc.
+
+信息只展示：
+
+Change
+Goal
+Expected Effect
+Status
+Driver Feedback（有可靠来源时）
+
+禁止 AI 自行推测空气动力学效果。
+
+==================================================
+二十、GHOST COMPARE
+==================================================
+
+如果 Renderer 能稳定支持，加入 Ghost Compare。
+
+例如：
+
+RB19 geometry
+→ transparent / outline
+
+RB20 geometry
+→ solid
+
+Changed component
+→ emphasized
+
+用户能够快速看到：
+
+Where did the car change?
+
+不要追求真正 Geometry Morph。
+
+Crossfade / Overlay / Component Swap 已经足够。
+
+性能优先于炫技。
+
+==================================================
+二十一、SCAN EFFECT
+==================================================
+
+Scan Mode 只作为非常轻的交互反馈。
+
+点击 Component 后可以：
+
+thin scan line
+→ pass through selected region
+→ selected outline appears
+→ Component Detail opens
+
+动画约 0.5–1s。
+
+不要：
+
+绿色扫描 HUD
+大量数字
+Radar
+Cyberpunk Effect
+复杂 shader
+
+如果影响性能，直接取消。
+
+==================================================
+二十二、AERO FLOW
+==================================================
+
+Aero Flow 不属于第一阶段核心功能。
+
+如果未来实现：
+
+只能展示 Conceptual Airflow。
+
+必须明确标记：
+
+Conceptual Visualization
+
+没有 CFD 数据时禁止呈现成真实 CFD 结果。
+
+第一阶段不实现复杂流体粒子系统。
+
+==================================================
+二十三、DATA MODEL
+==================================================
+
+不要因为 UI 需求重新建立一套与 DATA_ARCHITECTURE.md 冲突的数据结构。
+
+继续复用并扩展现有：
+
+Team
+TeamSeason
+CarModel
+CarSpecification
+Component3DMapping
+Upgrade
+UpgradeLifecycleEvent
+TechnicalEra
+
+逻辑关系：
+
+Team
+ ↓
+CarModel / Generation
+ ↓
+CarSpecification
+ ↓
+Upgrade / UpgradeLifecycleEvent
+
+例如：
+
+Red Bull Racing
+ ↓
+RB20
+ ↓
+RB20 · Japanese GP Spec
+ ↓
+Floor Update
+
+如果代码中需要使用 CarGeneration 这一语义：
+
+优先把它作为 CarModel 的产品层概念，
+不要无理由复制一个完全重叠的新数据库实体。
+
+==================================================
+二十四、SOURCE / ACCURACY RULE
+==================================================
+
+Evolution 中：
+
+赛车型号
+升级时间
+升级部件
+技术变化
+升级状态
+车手反馈
+Official URL
+
+必须来自可靠数据。
+
+允许：
+
+Unknown
+Not Available
+Unverified
+
+禁止 AI 填补缺失事实。
+
+原则：
+
+Unknown > Invented
+
+3D 模型属于：
+
+Technical Illustration
+
+而不是：
+
+Exact CAD Reconstruction
+
+UI 中不要暗示模型具有工程级精度。
+
+==================================================
+二十五、PERFORMANCE
+==================================================
+
+这是 Flutter Mobile App。
+
+性能优先。
+
+要求：
+
+- Lightweight GLB/glTF
+- Low-Poly
+- Reasonable texture resolution
+- Lazy load
+- Cache model assets
+- 不同时加载大量历史赛车
+- Generation Timeline 不加载多个完整高精模型
+- 退出 Evolution 后正确释放不需要的 3D 资源
+- 避免大量实时 Shader
+- 避免复杂粒子效果
+- 避免没有必要的实时物理计算
+
+默认只加载：
+
+Current Selected Car
+
+需要 Compare 时才加载：
+
+Comparison Car / Component
+
+如果模型支持 LOD，可以使用，但不要为了 LOD 增加过度工程复杂度。
+
+==================================================
+二十六、RESPONSIVE MOBILE UI
+==================================================
+
+优先设计 Android/iOS 手机竖屏。
+
+3D Car Explorer 必须给赛车足够空间。
+
+不要简单照搬 Desktop Dashboard。
+
+手机端建议：
+
+Top
+→ Car Identity / Official Link
+
+Main
+→ 3D Viewer
+
+Below
+→ Compact Controls
+
+Then
+→ Generation / Season Evolution
+
+Component Detail 可以使用：
+
+Bottom Sheet
+或
+Context Panel
+
+根据现有 App Design System 选择更一致的方式。
+
+Bottom Sheet 不要一次覆盖整个赛车。
+
+==================================================
+二十七、MOTION
+==================================================
+
+所有动画遵循：
+
+Subtle
+Fast
+Functional
+
+推荐：
+
+150–350ms UI Transition
+
+较复杂的：
+
+Exploded / Assemble
+可以略长，但保持紧凑。
+
+不要：
+
+- 过度弹簧动画
+- 无意义 Loading Animation
+- 大量渐变移动
+- 旋转文字
+- 发光边框
+- 连续自动播放动画
+
+==================================================
+二十八、IMPLEMENTATION PRIORITY
+==================================================
+
+不要一次把所有概念做完。
+
+Phase 1：
+
+1. 替换 Cuboid Car 为 Refined Low-Poly F1 Model
+2. Team Color / Material System
+3. Stable Component IDs
+4. 保持现有 Rotation Interaction
+5. Dynamic Component Labels
+6. Component Selection
+7. Component Detail
+8. Official Car Link
+9. Generation Selector
+
+Phase 2：
+
+10. Focus Mode
+11. Exploded View
+12. Technical View
+13. In-Season Evolution
+14. Upgrade → 3D Component Highlight
+
+Phase 3：
+
+15. Generation Compare
+16. Specification Compare
+17. Ghost Compare
+18. Heritage View
+
+Later / Optional：
+
+19. Scan Effect
+20. Layer Peel
+21. Conceptual Aero Flow
+22. X-Ray（只有拥有可靠内部模型后）
+
+==================================================
+二十九、DO NOT DO
+==================================================
+
+明确禁止：
+
+- 不要重写已经满意的 Rotation Interaction
+- 不要重新设计整个 App
+- 不要把 Evolution 做成独立风格
+- 不要使用高模赛车
+- 不要做 CAD
+- 不要为每个车型复制整个系统
+- 不要大量使用圆角 Card
+- 不要使用 AI Gradient
+- 不要使用 Neon HUD
+- 不要做实时 CFD
+- 不要虚构空气动力学数据
+- 不要虚构赛车内部结构
+- 不要做 Reference Image Gallery
+- 不要下载官方赛车图片进 App
+- 不要增加社交/新闻/视频等无关功能
+- 不要让 3D 功能影响 Home / Calendar 已经正常工作的功能
+- 不要为了视觉效果牺牲手机性能
+
+==================================================
+三十、FINAL EXPERIENCE
+==================================================
+
+最终用户应该能够：
+
+进入 Evolution
+→ 选择 Red Bull Racing
+→ 浏览 RB19 / RB20 / RB21
+→ 选择 RB20
+→ 看到轻量但完整的 RB20 风格 F1 3D 赛车
+→ 拖动旋转
+→ 查看周围技术标签
+→ 点击 Front Wing
+→ Front Wing 被 Highlight
+→ 阅读它是什么、有什么作用
+→ Deconstruct 赛车
+→ 查看各主要部件空间关系
+→ 查看 RB20 赛季升级时间线
+→ 点击某次升级
+→ 3D 模型直接 Highlight 对应变化部件
+→ Compare RB19 / RB20
+→ 看到主要技术差异
+→ 必要时点击 Official Car ↗ 前往官方车型页面。
+
+整个体验应该让用户感觉：
+
+“我不是在看一张赛车图片，而是在探索这辆赛车是如何组成、如何变化、如何演进的。”
+
+同时保持：
+
+Lightweight
+Minimal
+Fast
+Understandable
+Technically credible
+
+==================================================
+三十一、IMPLEMENTATION REQUIREMENT
+==================================================
+
+完成后不要只告诉我“已完成”。
+
+请输出：
+
+1. 修改了哪些文件；
+2. 哪些现有代码被复用；
+3. 3D 模型资产结构；
+4. Component ID 列表；
+5. Team Material/Livery 配置方式；
+6. Generation / Specification 数据如何映射到模型；
+7. Exploded View 的实现方式；
+8. Label Projection / Collision Avoidance 的实现方式；
+9. 当前哪些内容使用真实数据，哪些仍然是 Mock；
+10. 哪些功能属于 Phase 2 / Phase 3 尚未实现；
+11. 性能方面采取了哪些措施；
+12. 如何手动测试：
+   - Rotate
+   - Zoom
+   - Component Select
+   - Label
+   - Generation Switch
+   - Official Car
+   - Exploded View
+   - Evolution
+   - Compare
+
+如果现有技术栈无法高质量实现某项需求，不要通过 Hack 强行实现。
+
+先说明技术限制，再提出与当前架构兼容、性能更好的替代方案。

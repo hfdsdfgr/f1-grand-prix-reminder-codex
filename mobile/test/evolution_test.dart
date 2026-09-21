@@ -66,6 +66,18 @@ void main() {
         ),
       ),
     );
+    // Asset IO runs outside the widget test's fake clock.
+    for (
+      var i = 0;
+      i < 100 && !tester.any(find.byKey(const ValueKey('car-canvas')));
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump();
+    }
+    expect(find.byKey(const ValueKey('car-canvas')), findsOneWidget);
     await tester.pumpAndSettle();
     expect(
       find.text('Showing saved upgrades. They may have changed.'),
