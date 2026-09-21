@@ -137,6 +137,13 @@ void main() {
             as List)[0]['component_id'] =
         'missing_component';
     expect(() => CarModel(brokenComponent), throwsFormatException);
+
+    final brokenMaterial =
+        jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    (((brokenMaterial['components'] as List)[0]['faces'] as List)[0]
+            as Map<String, dynamic>)['material'] =
+        'missing_material';
+    expect(() => CarModel(brokenMaterial), throwsFormatException);
   });
 
   testWidgets('native gestures, keyboard, presets and 13 component details', (

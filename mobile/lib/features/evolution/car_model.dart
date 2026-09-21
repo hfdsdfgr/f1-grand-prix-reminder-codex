@@ -20,6 +20,8 @@ const carComponentIds = {
   'beam_wing',
   'rear_wing',
 };
+const _paletteMaterialIds = {'body', 'secondary', 'carbon', 'accent'};
+const _meshMaterialIds = {..._paletteMaterialIds, 'tyre', 'hub'};
 
 CarPoint carPartOffset(String id) => switch (id) {
   'front_wing' => (0, 0, -.72),
@@ -115,12 +117,13 @@ class CarModel {
       ),
     );
     final archives = (json['carModels'] as List).cast<Map<String, dynamic>>();
-    _validate(components, archives);
+    _validate(components, materials, archives);
     return CarModel._(components, materials, archives);
   }
 
   static void _validate(
     List<CarComponent> components,
+    Map<String, Map<String, Color>> materials,
     List<Map<String, dynamic>> archives,
   ) {
     final componentIds = components.map((part) => part.id).toSet();
@@ -129,9 +132,18 @@ class CarModel {
         componentIds.length != carComponentIds.length ||
         !componentIds.containsAll(carComponentIds) ||
         archiveIds.length != archives.length ||
-        archiveIds.any((id) => id is! String || id.isEmpty)) {
+        archiveIds.any((id) => id is! String || id.isEmpty) ||
+        !materials.containsKey('neutral') ||
+        materials.values.any(
+          (palette) => !palette.keys.toSet().containsAll(_paletteMaterialIds),
+        ) ||
+        components.any(
+          (part) => part.faces.any(
+            (face) => !_meshMaterialIds.contains(face.material),
+          ),
+        )) {
       throw const FormatException(
-        'Invalid Evolution component or car model ID.',
+        'Invalid Evolution component, material, or car model ID.',
       );
     }
     for (final archive in archives) {
