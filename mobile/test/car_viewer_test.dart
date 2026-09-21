@@ -21,11 +21,12 @@ Future<void> showCar(
   WidgetTester t, {
   String language = 'en',
   double width = 390,
+  double height = 1000,
   double scale = 1,
   Brightness brightness = Brightness.light,
 }) async {
   t.view.devicePixelRatio = 1;
-  t.view.physicalSize = Size(width, 1000);
+  t.view.physicalSize = Size(width, height);
   await t.pumpWidget(
     MaterialApp(
       locale: Locale(language),
@@ -40,7 +41,7 @@ Future<void> showCar(
       ),
       home: MediaQuery(
         data: MediaQueryData(
-          size: Size(width, 1000),
+          size: Size(width, height),
           textScaler: TextScaler.linear(scale),
         ),
         child: Scaffold(
@@ -310,12 +311,15 @@ void main() {
     for (final sample in [
       ('zh', 390.0, 1.0, Brightness.light),
       ('en', 390.0, 1.0, Brightness.dark),
+      ('en', 375.0, 1.0, Brightness.light),
+      ('en', 844.0, 1.0, Brightness.dark),
       ('zh', 320.0, 2.0, Brightness.light),
     ]) {
       await showCar(
         t,
         language: sample.$1,
         width: sample.$2,
+        height: sample.$2 == 844 ? 390 : 1000,
         scale: sample.$3,
         brightness: sample.$4,
       );
