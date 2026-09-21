@@ -59,7 +59,7 @@ void main() {
             child: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: EvolutionPage(repository: repo),
+                child: EvolutionPage(repository: repo, enableGltf: false),
               ),
             ),
           ),

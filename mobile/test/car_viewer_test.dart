@@ -50,7 +50,7 @@ Future<void> showCar(
               child: SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: CarViewer(key: UniqueKey()),
+                  child: CarViewer(key: UniqueKey(), enableGltf: false),
                 ),
               ),
             ),

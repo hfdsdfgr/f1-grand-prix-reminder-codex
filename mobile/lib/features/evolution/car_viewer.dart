@@ -7,9 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/language.dart';
 import 'car_model.dart';
+import 'gltf_car_stage.dart';
 
 class CarViewer extends StatefulWidget {
-  const CarViewer({super.key});
+  const CarViewer({super.key, this.enableGltf = true});
+
+  final bool enableGltf;
   @override
   State<CarViewer> createState() => _CarViewerState();
 }
@@ -17,9 +20,11 @@ class CarViewer extends StatefulWidget {
 class _CarViewerState extends State<CarViewer> {
   late Future<CarModel> _model = CarModel.load();
   final _focus = FocusNode();
+  final _gltfController = GltfCarController();
   double _yaw = -.65, _pitch = .55, _zoom = 1, _startZoom = 1;
   String _selected = 'front_wing', _team = 'neutral', _archive = 'generic';
   bool _labels = true, _wire = false;
+  bool _gltfReady = false, _gltfUnavailable = false;
 
   @override
   void dispose() {
@@ -179,6 +184,7 @@ class _CarViewerState extends State<CarViewer> {
                 scheme: Theme.of(context).colorScheme,
                 chinese: zh,
                 textScaler: MediaQuery.textScalerOf(context),
+                renderModel: !_gltfReady || _wire,
               );
               return Semantics(
                 label: tr(context, 'Interactive car model'),
@@ -248,14 +254,46 @@ class _CarViewerState extends State<CarViewer> {
                       }),
                       onTapUp: (d) {
                         _focus.requestFocus();
-                        final hit = painter.partAt(d.localPosition, size);
+                        final hit = _gltfReady
+                            ? _gltfController.partAt(d.localPosition, size)
+                            : painter.partAt(d.localPosition, size);
                         if (hit != null) setState(() => _selected = hit);
                       },
                       child: RepaintBoundary(
-                        child: CustomPaint(
-                          key: const ValueKey('car-canvas'),
+                        child: SizedBox.fromSize(
                           size: size,
-                          painter: painter,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (widget.enableGltf && !_gltfUnavailable)
+                                GltfCarStage(
+                                  model: model,
+                                  controller: _gltfController,
+                                  yaw: _yaw,
+                                  pitch: _pitch,
+                                  zoom: _zoom,
+                                  selected: _selected,
+                                  team: _team,
+                                  onReady: () {
+                                    if (mounted && !_gltfReady) {
+                                      setState(() => _gltfReady = true);
+                                    }
+                                  },
+                                  onUnavailable: () {
+                                    if (mounted && !_gltfUnavailable) {
+                                      setState(() {
+                                        _gltfReady = false;
+                                        _gltfUnavailable = true;
+                                      });
+                                    }
+                                  },
+                                ),
+                              CustomPaint(
+                                key: const ValueKey('car-canvas'),
+                                painter: painter,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -387,6 +425,7 @@ class CarPainter extends CustomPainter {
   final double yaw, pitch, zoom;
   final String selected, team;
   final bool labels, wire, chinese;
+  final bool renderModel;
   final ColorScheme scheme;
   final TextScaler textScaler;
   Size? _cachedSize;
@@ -403,6 +442,7 @@ class CarPainter extends CustomPainter {
     required this.chinese,
     required this.scheme,
     required this.textScaler,
+    this.renderModel = true,
   });
 
   (Offset, double) _project(CarPoint p, Size size) {
@@ -450,34 +490,36 @@ class CarPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.clipRect(Offset.zero & size);
-    for (final f in _faces(size)) {
-      final active = f.part == selected;
-      final base = active
-          ? scheme.primary
-          : switch (f.source.material) {
-              'tyre' => const Color(0xff303338),
-              'hub' => const Color(0xff707980),
-              _ => model.materials[team]![f.source.material]!,
-            };
-      var color = Color.from(
-        alpha: 1,
-        red: base.r * f.source.light,
-        green: base.g * f.source.light,
-        blue: base.b * f.source.light,
-      );
-      if (!active) color = Color.lerp(color, scheme.surface, .18)!;
-      if (!wire) canvas.drawPath(f.path, Paint()..color = color);
-      canvas.drawPath(
-        f.path,
-        Paint()
-          ..color = (wire
-              ? active
-                    ? scheme.primary
-                    : scheme.outline
-              : color)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = (wire ? 0.6 : 0.45),
-      );
+    if (renderModel) {
+      for (final f in _faces(size)) {
+        final active = f.part == selected;
+        final base = active
+            ? scheme.primary
+            : switch (f.source.material) {
+                'tyre' => const Color(0xff303338),
+                'hub' => const Color(0xff707980),
+                _ => model.materials[team]![f.source.material]!,
+              };
+        var color = Color.from(
+          alpha: 1,
+          red: base.r * f.source.light,
+          green: base.g * f.source.light,
+          blue: base.b * f.source.light,
+        );
+        if (!active) color = Color.lerp(color, scheme.surface, .18)!;
+        if (!wire) canvas.drawPath(f.path, Paint()..color = color);
+        canvas.drawPath(
+          f.path,
+          Paint()
+            ..color = (wire
+                ? active
+                      ? scheme.primary
+                      : scheme.outline
+                : color)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (wire ? 0.6 : 0.45),
+        );
+      }
     }
     if (labels) _paintLabels(canvas, size);
     canvas.restore();
@@ -562,6 +604,7 @@ class CarPainter extends CustomPainter {
       team != old.team ||
       labels != old.labels ||
       wire != old.wire ||
+      renderModel != old.renderModel ||
       chinese != old.chinese ||
       scheme != old.scheme ||
       textScaler != old.textScaler;

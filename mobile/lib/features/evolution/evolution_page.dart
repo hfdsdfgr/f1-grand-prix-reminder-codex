@@ -6,7 +6,12 @@ import 'car_viewer.dart';
 
 class EvolutionPage extends StatefulWidget {
   final RaceRepository repository;
-  const EvolutionPage({super.key, required this.repository});
+  final bool enableGltf;
+  const EvolutionPage({
+    super.key,
+    required this.repository,
+    this.enableGltf = true,
+  });
 
   @override
   State<EvolutionPage> createState() => _EvolutionPageState();
@@ -32,7 +37,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
       const SizedBox(height: 12),
       Text(tr(context, 'Follow what changes on the cars.')),
       const SizedBox(height: 24),
-      const CarViewer(),
+      CarViewer(enableGltf: widget.enableGltf),
       const SizedBox(height: 32),
       Row(
         children: [

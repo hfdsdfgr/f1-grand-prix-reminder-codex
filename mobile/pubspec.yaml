@@ -15,6 +15,9 @@ dependencies:
   flutter_local_notifications: ^22.3.1
   timezone: ^0.11.1
   url_launcher: ^6.3.2
+  flutter_scene: 0.23.0
+  vector_math: ^2.2.0
+  hooks: ^2.0.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -24,3 +27,4 @@ flutter:
   assets:
     - assets/circuits/
     - assets/evolution/car.json
+    - flutter_scene_generated/

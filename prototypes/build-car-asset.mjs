@@ -56,4 +56,5 @@ const carStart=html.indexOf('const carModels='),carEnd=html.indexOf(';',carStart
 const carModels=vm.runInNewContext(html.slice(carStart,carEnd)+';carModels');
 const mobileData={components:components.map((c,i)=>({...c,en:english[i]})),materials,carModels};
 await mkdir(new URL('../mobile/assets/evolution/',import.meta.url),{recursive:true});
+await writeFile(new URL('../mobile/assets/evolution/universal-car.glb',import.meta.url),glb);
 await writeFile(new URL('../mobile/assets/evolution/car.json',import.meta.url),JSON.stringify(mobileData,(_,v)=>typeof v==='number'?Math.round(v*1e6)/1e6:v));
