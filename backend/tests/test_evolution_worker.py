@@ -132,6 +132,7 @@ class DeepSeekTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.results, [])
         self.assertEqual(seen['authorization'], 'Bearer test-secret')
         self.assertEqual(seen['body']['response_format'], {'type': 'json_object'})
+        self.assertEqual(seen['body']['thinking'], {'type': 'disabled'})
         self.assertNotIn('test-secret', json.dumps(seen['body']))
 
 

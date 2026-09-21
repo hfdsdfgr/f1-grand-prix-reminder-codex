@@ -64,6 +64,9 @@ class DeepSeekProvider(LLMProvider):
                 }, ensure_ascii=False)},
             ],
             'response_format': {'type': 'json_object'},
+            # JSON extraction needs a final content field; DeepSeek thinking mode
+            # can legitimately return only reasoning_content.
+            'thinking': {'type': 'disabled'},
             'max_tokens': 6000,
             'temperature': 0,
         }
