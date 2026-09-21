@@ -92,6 +92,14 @@ def persist_validated(
             raise RuntimeError(f'Unknown race: {documents[0].race_id}')
         race_id, season_id = race
         _ensure_components(db, season_id)
+        urls = [str(document.url) for document in documents]
+        known_urls = set()
+        if urls:
+            marks = ','.join('?' for _ in urls)
+            known_urls = {row[0] for row in db.execute(
+                f'SELECT url FROM evolution_source_documents WHERE url IN ({marks})', urls
+            )}
+        all_sources_previously_seen = len(known_urls) == len(set(urls))
         snapshot_id = _save_documents(db, documents, race_id)
         generation_id = new_id('gen')
         db.execute('''INSERT INTO ai_generations VALUES (?,?,?,?,?,?,?,?)''', (
@@ -128,6 +136,11 @@ def persist_validated(
                             AND d.url IN ({marks}) LIMIT 1''',
                             (team_season_id, race_id, update.component_id, *source_urls)).fetchone()
                 if existing is None:
+                    # A repeat using only known documents must not let a non-deterministic
+                    # model invent a new event.  New documents may still enrich the race.
+                    if all_sources_previously_seen:
+                        skipped += 1
+                        continue
                     upgrade_id = new_id('upg')
                     db.execute('''INSERT INTO upgrades
                         (upgrade_id,team_season_id,car_model_id,introduced_race_id,component_type_id,title,
