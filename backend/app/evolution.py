@@ -65,13 +65,14 @@ def load_evolution(path: str, season: int) -> EvolutionFeed:
             AND (u.introduced_race_id IS NULL OR r.race_id IS NOT NULL)
             ORDER BY r.round IS NULL,r.round,u.created_at,u.upgrade_id''', (season,)).fetchall()
         source_rows = db.execute('''SELECT DISTINCT uc.upgrade_id,d.publisher AS provider,
-            d.canonical_url AS url,r.published_at
+            d.canonical_url AS url,(SELECT r.published_at FROM evolution_source_revisions r
+                WHERE r.source_id=d.source_id AND r.published_at IS NOT NULL
+                ORDER BY r.fetched_at DESC LIMIT 1) AS published_at
             FROM upgrade_claims uc
             JOIN evolution_claims c ON c.claim_id=uc.claim_id
             JOIN claim_evidence ce ON ce.claim_id=c.claim_id
             JOIN evidence_anchors a ON a.anchor_id=ce.anchor_id
             JOIN evolution_source_documents d ON d.source_id=a.source_id
-            JOIN evolution_source_revisions r ON r.revision_id=a.first_revision_id
             JOIN upgrades u ON u.upgrade_id=uc.upgrade_id
             JOIN team_seasons ts ON ts.team_season_id=u.team_season_id
             JOIN seasons s ON s.season_id=ts.season_id

@@ -20,6 +20,7 @@ from app.evolution_worker.sources import (
 )
 from app.evolution_worker.validator import validate_batch
 from app.evolution_worker.persistence import persist_validated, review
+from app.evolution_worker.worker import race_window
 from app.data_schema import connect
 from app.evolution import load_evolution
 from app.models import RaceFeed
@@ -215,6 +216,14 @@ class DeepSeekTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PersistenceTests(unittest.TestCase):
+    def test_public_race_id_resolves_internal_session_window(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            start, end = race_window(path, '2026-1')
+            self.assertIsNotNone(start)
+            self.assertIsNotNone(end)
+
     def persist(self, path, documents, batch):
         validated = validate_batch(batch, documents)
         result = persist_validated(path, documents, validated.results, provider='deepseek',

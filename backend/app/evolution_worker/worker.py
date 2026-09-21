@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 
 from app.evolution_worker.llm import DeepSeekProvider, LLMProvider, PIPELINE_VERSION, PROMPT_VERSION
@@ -17,7 +18,7 @@ logger = logging.getLogger('evolution_worker')
 
 
 def completed_race(path: str, season: int, round_number: int) -> tuple[str, str]:
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db:
         row = db.execute('''SELECT r.race_id,r.display_name,s.scheduled_start,s.actual_end,s.status
             FROM races r JOIN seasons y ON y.season_id=r.season_id
             LEFT JOIN sessions s ON s.race_id=r.race_id AND s.session_type='race'
@@ -35,10 +36,12 @@ def completed_race(path: str, season: int, round_number: int) -> tuple[str, str]
 
 
 def race_window(path: str, race_id: str) -> tuple[datetime | None, datetime | None]:
-    with sqlite3.connect(path) as db:
-        row = db.execute('''SELECT scheduled_start,actual_end FROM sessions
-            WHERE race_id=? AND session_type='race' ORDER BY scheduled_start DESC LIMIT 1''',
-                         (race_id,)).fetchone()
+    season, round_number = map(int, race_id.split('-'))
+    with closing(sqlite3.connect(path)) as db:
+        row = db.execute('''SELECT x.scheduled_start,x.actual_end FROM sessions x
+            JOIN races r ON r.race_id=x.race_id JOIN seasons s ON s.season_id=r.season_id
+            WHERE s.year=? AND r.round=? AND x.session_type='race'
+            ORDER BY x.scheduled_start DESC LIMIT 1''', (season, round_number)).fetchone()
     if row is None or not row[0]:
         return None, None
     start = datetime.fromisoformat(row[0].replace('Z', '+00:00'))
