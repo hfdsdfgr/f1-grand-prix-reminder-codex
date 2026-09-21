@@ -26,7 +26,8 @@ TEAM_NAMES = {
 
 
 def _normal(value: str) -> str:
-    return re.sub(r'\W+', ' ', value.casefold()).strip()
+    words = re.sub(r'\W+', ' ', value.casefold()).split()
+    return ' '.join(word for word in words if word not in {'a', 'an', 'the', 'additional'})
 
 
 def _fingerprint(race_id: str, team_id: str, component_id: str, change: str) -> str:
