@@ -46,6 +46,7 @@ async def run_worker(
     logger.info('DeepSeek request started')
     extracted = await llm_provider.extract_evolution(race_id, collection.documents)
     logger.info('DeepSeek extraction completed')
+    raw_results = [item.model_dump(mode='json') for item in extracted.results]
     validated = validate_batch(extracted, collection.documents)
     logger.info('Validation completed: results=%d issues=%d', len(validated.results), len(validated.issues))
     return {
@@ -64,6 +65,7 @@ async def run_worker(
         } for item in collection.documents],
         'provider_failures': collection.failures,
         'duplicates_skipped': collection.duplicates_skipped,
+        'deepseek_raw_results': raw_results,
         'validation_issues': validated.issues,
         'results': [item.model_dump(mode='json') for item in validated.results],
     }

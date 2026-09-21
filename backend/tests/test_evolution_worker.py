@@ -110,6 +110,20 @@ class ValidatorTests(unittest.TestCase):
         result = validate_batch(batch, [source()])
         self.assertEqual(result.results[0].updates, [])
 
+    def test_validator_does_not_assume_introduced_without_status_words(self):
+        batch = ExtractionBatch.model_validate({
+            'results': [{'race_id': '2026-1', 'team_id': 'test-team', 'updates': [{
+                'component_id': 'floor', 'change': 'Revised floor geometry',
+                'status': 'introduced', 'evidence_level': 'confirmed',
+                'driver_feedback': [], 'source_ids': ['src_one'], 'confidence': .9,
+                'evidence': [{'source_id': 'src_one',
+                              'quote': 'floor geometry during FP1',
+                              'supports': ['change', 'status']}],
+            }]}],
+        })
+        result = validate_batch(batch, [source()])
+        self.assertEqual(result.results[0].updates[0].status, 'unknown')
+
 
 class DeepSeekTests(unittest.IsolatedAsyncioTestCase):
     async def test_json_request_and_bearer_header(self):
