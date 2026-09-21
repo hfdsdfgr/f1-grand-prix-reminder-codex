@@ -106,6 +106,23 @@ class EvolutionSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.documents[0].source_tier, 2)
         self.assertEqual(result.failures, [])
 
+    async def test_redirect_navigation_preserves_required_trailing_slash(self):
+        async def handler(request):
+            if request.url.path.endswith('/'):
+                return httpx.Response(200, headers={'content-type': 'text/html'}, text='''
+                    <title>Race report</title><article>The team tested a revised floor geometry
+                    during Friday practice and retained it for the race after reviewing data.</article>''')
+            return httpx.Response(308, headers={'location': str(request.url) + '/'})
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            result = await TrustedUrlProvider(client, public_resolver).collect(
+                '2026-1', ['https://www.mclaren.com/race-report'],
+            )
+        finally:
+            await client.aclose()
+        self.assertEqual(result.failures, [])
+        self.assertEqual(str(result.documents[0].url), 'https://www.mclaren.com/race-report')
+
 
 class ValidatorTests(unittest.TestCase):
     def test_validator_requires_quotes_and_downgrades_test_to_tested(self):

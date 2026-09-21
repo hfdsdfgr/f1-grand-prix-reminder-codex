@@ -146,7 +146,14 @@ def validate_public_url(url: str, resolver=socket.getaddrinfo) -> tuple[str, int
         ip = ipaddress.ip_address(address)
         if not ip.is_global:
             raise ValueError(f'Source host resolved to a non-public address: {parsed.hostname}')
-    normalized = canonical_url(url)
+    query = urlencode([
+        (key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if not key.casefold().startswith('utm_') and key.casefold() not in TRACKING_QUERY_KEYS
+    ])
+    # Preserve the path exactly for HTTP redirects; canonical_url is applied only
+    # after the final response so identity normalization cannot alter navigation.
+    normalized = urlunsplit((parsed.scheme.casefold(), parsed.netloc.casefold(),
+                             parsed.path or '/', query, ''))
     return normalized, *policy
 
 
@@ -219,11 +226,12 @@ class TrustedUrlProvider(EvolutionSourceProvider):
                 raise ValueError('Source contains too little readable text')
             digest = hashlib.sha256(cleaned.encode('utf-8')).hexdigest()
             # A source is its canonical URL; the content hash is its revision.
-            source_id = f'src_{hashlib.sha256(current.encode()).hexdigest()[:20]}'
+            identity_url = canonical_url(current)
+            source_id = f'src_{hashlib.sha256(identity_url.encode()).hexdigest()[:20]}'
             return SourceDocument(
                 source_id=source_id, race_id=race_id,
                 publisher=urlsplit(current).hostname or 'unknown', source_type=source_type,
-                source_tier=tier, title=title, url=current,
+                source_tier=tier, title=title, url=identity_url,
                 published_at=published_at_from_html(raw), fetched_at=datetime.now(timezone.utc), raw_text=raw[:MAX_DOCUMENT_CHARS],
                 cleaned_text=cleaned, content_hash=digest,
             )
