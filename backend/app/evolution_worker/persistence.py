@@ -146,6 +146,9 @@ def persist_validated(
                     source = next((item for item in documents if item.source_id == source_id), None)
                     if source is None:
                         continue
+                    stored = db.execute('SELECT source_id FROM evolution_source_documents WHERE url=?',
+                                        (str(source.url),)).fetchone()
+                    source_id = stored[0] if stored else source_id
                     db.execute('''INSERT OR IGNORE INTO evolution_upgrade_sources(upgrade_id,source_id)
                         VALUES (?,?)''', (upgrade_id, source_id))
                     db.execute('''INSERT OR IGNORE INTO upgrade_sources

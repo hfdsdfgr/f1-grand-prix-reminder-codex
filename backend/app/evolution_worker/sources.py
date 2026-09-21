@@ -205,7 +205,8 @@ class TrustedUrlProvider(EvolutionSourceProvider):
             if len(cleaned) < 80:
                 raise ValueError('Source contains too little readable text')
             digest = hashlib.sha256(cleaned.encode('utf-8')).hexdigest()
-            source_id = f'src_{hashlib.sha256((current + digest).encode()).hexdigest()[:20]}'
+            # A source is its canonical URL; the content hash is its revision.
+            source_id = f'src_{hashlib.sha256(current.encode()).hexdigest()[:20]}'
             return SourceDocument(
                 source_id=source_id, race_id=race_id,
                 publisher=urlsplit(current).hostname or 'unknown', source_type=source_type,
