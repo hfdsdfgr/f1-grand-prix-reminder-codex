@@ -116,6 +116,18 @@ def persist_validated(
                     existing = next((item for item in candidates if item[2] and
                                      SequenceMatcher(None, _normal(item[2]), _normal(update.change)).ratio() >= .88), None)
                 if existing is None:
+                    # Model wording can change between runs.  Reuse a prior event only when
+                    # its team/component/race and at least one cited source are identical.
+                    source_urls = [str(item.url) for item in documents if item.source_id in update.source_ids]
+                    if source_urls:
+                        marks = ','.join('?' for _ in source_urls)
+                        existing = db.execute(f'''SELECT u.upgrade_id,u.review_status,u.change_description
+                            FROM upgrades u JOIN evolution_upgrade_sources eus ON eus.upgrade_id=u.upgrade_id
+                            JOIN evolution_source_documents d ON d.source_id=eus.source_id
+                            WHERE u.team_season_id=? AND u.introduced_race_id=? AND u.component_type_id=?
+                            AND d.url IN ({marks}) LIMIT 1''',
+                            (team_season_id, race_id, update.component_id, *source_urls)).fetchone()
+                if existing is None:
                     upgrade_id = new_id('upg')
                     db.execute('''INSERT INTO upgrades
                         (upgrade_id,team_season_id,car_model_id,introduced_race_id,component_type_id,title,
