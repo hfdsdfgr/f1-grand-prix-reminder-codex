@@ -118,7 +118,7 @@ def publication_phase(published_at: datetime | None, race_start: datetime | None
         return 'unknown'
     if published_at < race_start:
         return 'pre_race'
-    if published_at <= race_end:
+    if published_at < race_end:
         return 'weekend'
     return 'post_race'
 

@@ -75,7 +75,7 @@ class EvolutionSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(published.isoformat(), '2026-09-13T17:00:00+00:00')
         self.assertEqual(publication_phase(
             published, datetime.fromisoformat('2026-09-13T13:00:00+00:00'),
-            datetime.fromisoformat('2026-09-13T15:00:00+00:00')), 'post_race')
+            datetime.fromisoformat('2026-09-13T17:00:00+00:00')), 'post_race')
 
     def test_cleaner_removes_scripts_and_deduplicates_text(self):
         title, text = clean_html('''<html><title>Tech</title><script>steal()</script>

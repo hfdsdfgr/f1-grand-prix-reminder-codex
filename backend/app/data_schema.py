@@ -564,6 +564,23 @@ def _migrate_evolution_identity(db: sqlite3.Connection, now: str) -> None:
         db.execute('''UPDATE upgrade_lifecycle_events SET lifecycle_claim_key=?,claim_id=?
             WHERE event_id=?''', (key, claim[0] if claim else None, event_id))
 
+    groups = db.execute('''SELECT upgrade_id,claim_id FROM upgrade_lifecycle_events
+        WHERE claim_id IS NOT NULL GROUP BY upgrade_id,claim_id''').fetchall()
+    for upgrade_id, claim_id in groups:
+        events = db.execute('''SELECT event_id FROM upgrade_lifecycle_events
+            WHERE upgrade_id=? AND claim_id=? ORDER BY timestamp,event_id''',
+                            (upgrade_id, claim_id)).fetchall()
+        keep = events[0][0]
+        for duplicate in events[1:]:
+            db.execute('DELETE FROM review_items WHERE entity_type=\'evolution_lifecycle\' AND entity_id=?',
+                       (duplicate[0],))
+            db.execute('DELETE FROM upgrade_lifecycle_events WHERE event_id=?', (duplicate[0],))
+        anchor = db.execute('SELECT primary_anchor_id FROM evolution_claims WHERE claim_id=?',
+                            (claim_id,)).fetchone()[0]
+        key = hashlib.sha256(f'{upgrade_id}|{claim_id}'.encode()).hexdigest()
+        db.execute('''UPDATE upgrade_lifecycle_events
+            SET lifecycle_claim_key=?,source=? WHERE event_id=?''', (key, anchor, keep))
+
 
 def migrate(path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
