@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/language.dart';
 import '../../data/race_repository.dart';
+import 'car_model.dart';
 import 'car_viewer.dart';
 import 'compare_panel.dart';
 
@@ -301,6 +302,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                     key: ValueKey(entry.id),
                     entry: entry,
                     selected: entry.id == _selectedUpgrade,
+                    mappedTo3d: carComponentIds.contains(entry.componentId),
                     onSelected: () => _selectUpgrade(entry),
                   ),
               ],
@@ -320,11 +322,13 @@ class _EvolutionPageState extends State<EvolutionPage> {
 class _UpgradeDetails extends StatelessWidget {
   final UpgradeEntry entry;
   final bool selected;
+  final bool mappedTo3d;
   final VoidCallback onSelected;
   const _UpgradeDetails({
     super.key,
     required this.entry,
     required this.selected,
+    required this.mappedTo3d,
     required this.onSelected,
   });
 
@@ -361,6 +365,17 @@ class _UpgradeDetails extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 12),
                   child: Text('${tr(context, field.$1)}: ${field.$2}'),
                 ),
+            if (!mappedTo3d)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  tr(
+                    context,
+                    'This upgrade has no compatible 3D component mapping.',
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             const SizedBox(height: 16),
             Text(
               tr(context, 'Sources'),

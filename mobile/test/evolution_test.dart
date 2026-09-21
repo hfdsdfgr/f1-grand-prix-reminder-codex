@@ -43,6 +43,28 @@ void main() {
                   },
                 ],
               },
+              {
+                'id': 'unmapped',
+                'team_id': 't',
+                'team': 'Test Team',
+                'component_id': 'brake_duct',
+                'component': 'Brake duct',
+                'title': 'Brake duct update',
+                'status': 'tested',
+                'confidence': 'high',
+                'race_id': '2026-2',
+                'race': 'Next Grand Prix',
+                'round': 2,
+                'change': 'New duct',
+                'goal': null,
+                'expected_effect': null,
+                'sources': [
+                  {
+                    'provider': 'Test source',
+                    'url': 'https://example.com/test',
+                  },
+                ],
+              },
             ],
             'timeline': [
               {
@@ -55,7 +77,7 @@ void main() {
                 'race_id': '2026-2',
                 'race': 'Next Grand Prix',
                 'round': 2,
-                'upgrade_ids': <String>[],
+                'upgrade_ids': ['unmapped'],
               },
             ],
             'stale': true,
@@ -108,6 +130,19 @@ void main() {
       find.byKey(const ValueKey('car-canvas')),
     );
     expect((car.painter! as CarPainter).selected, 'floor');
+    final unmappedEvent = find.byKey(const ValueKey('evolution-2026-2'));
+    await tester.ensureVisible(unmappedEvent);
+    await tester.tap(unmappedEvent);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('This upgrade has no compatible 3D component mapping.'),
+      findsOneWidget,
+    );
+    expect((car.painter! as CarPainter).selected, 'floor');
+    await tester.tap(event);
+    await tester.pumpAndSettle();
     final compare = find.byKey(const ValueKey('specification-compare'));
     await tester.ensureVisible(compare);
     await tester.tap(compare);

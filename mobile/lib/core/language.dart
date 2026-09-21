@@ -86,6 +86,7 @@ const _chinese = {
   'Season Evolution': '赛季演进',
   'Upgrade': '存在升级',
   'No recorded upgrade': '无已记录升级',
+  'This upgrade has no compatible 3D component mapping.': '该升级暂未映射到兼容的 3D 部件。',
   'Change': '变化',
   'Goal': '目标',
   'Expected effect': '预期效果',
