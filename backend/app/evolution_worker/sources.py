@@ -35,6 +35,12 @@ TRUSTED_HOSTS = {
     'the-race.com': (4, 'technical_media'),
     'racefans.net': (4, 'technical_media'),
 }
+TEAM_DOMAINS = {
+    'mclaren': ('mclaren.com',), 'ferrari': ('ferrari.com',),
+    'mercedes': ('mercedesamgf1.com',), 'red_bull': ('redbullracing.com',),
+    'alpine': ('alpinef1.com',), 'williams': ('williamsf1.com',),
+    'haas': ('haasf1team.com',), 'cadillac': ('cadillacf1team.com',),
+}
 USER_AGENT = 'GrandPrixReminder-Evolution/0.1 (+evidence-only collector)'
 MAX_BODY_BYTES = 2_000_000
 MAX_DOCUMENT_CHARS = 40_000
@@ -226,3 +232,22 @@ class TrustedUrlProvider(EvolutionSourceProvider):
                 await client.aclose()
         unique, skipped = deduplicate(documents)
         return CollectionResult(unique, failures, skipped)
+
+
+class TeamWebsiteProvider(TrustedUrlProvider):
+    """One provider for configured official team domains; no search snippets."""
+    def __init__(self, team_id: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if team_id not in TEAM_DOMAINS:
+            raise ValueError(f'Unsupported team website: {team_id}')
+        self.team_id = team_id
+
+    async def collect(self, race_id: str, urls: list[str]) -> CollectionResult:
+        allowed = TEAM_DOMAINS[self.team_id]
+        for url in urls:
+            host = (urlsplit(url).hostname or '').lower()
+            if not any(host == domain or host.endswith(f'.{domain}') for domain in allowed):
+                raise ValueError(f'URL is not on the official {self.team_id} domain')
+        result = await super().collect(race_id, urls)
+        result.documents = [item.model_copy(update={'team_ids': [self.team_id]}) for item in result.documents]
+        return result
