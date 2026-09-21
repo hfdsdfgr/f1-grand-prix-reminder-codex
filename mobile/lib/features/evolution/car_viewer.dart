@@ -295,6 +295,7 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                 scheme: Theme.of(context).colorScheme,
                 chinese: zh,
                 textScaler: MediaQuery.textScalerOf(context),
+                labelStyle: Theme.of(context).textTheme.labelMedium,
                 renderModel: !_gltfReady || _wire,
                 focus: _focusAnimation.value,
                 exploded: _explodeAnimation.value,
@@ -657,6 +658,7 @@ class CarPainter extends CustomPainter {
   final double focus, exploded;
   final ColorScheme scheme;
   final TextScaler textScaler;
+  final TextStyle? labelStyle;
   Size? _cachedSize;
   List<_Face> _cachedFaces = [];
   CarPainter({
@@ -671,6 +673,7 @@ class CarPainter extends CustomPainter {
     required this.chinese,
     required this.scheme,
     required this.textScaler,
+    this.labelStyle,
     required this.focus,
     required this.exploded,
     required this.technical,
@@ -803,7 +806,9 @@ class CarPainter extends CustomPainter {
         final text = TextPainter(
           text: TextSpan(
             text: a.component.text(chinese)[0],
-            style: TextStyle(color: color, fontSize: fontSize),
+            style:
+                labelStyle?.copyWith(color: color, fontSize: fontSize) ??
+                TextStyle(color: color, fontSize: fontSize),
           ),
           textDirection: TextDirection.ltr,
           maxLines: 1,
@@ -852,5 +857,6 @@ class CarPainter extends CustomPainter {
       technical != old.technical ||
       chinese != old.chinese ||
       scheme != old.scheme ||
-      textScaler != old.textScaler;
+      textScaler != old.textScaler ||
+      labelStyle != old.labelStyle;
 }

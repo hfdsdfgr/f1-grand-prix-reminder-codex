@@ -14,6 +14,7 @@ import 'package:grand_prix_reminder/features/evolution/car_model.dart';
 import 'package:grand_prix_reminder/features/evolution/car_viewer.dart';
 
 final canvas = find.byKey(const ValueKey('car-canvas'));
+var previewFontAvailable = false;
 CarPainter painter(WidgetTester t) =>
     t.widget<CustomPaint>(canvas).painter! as CarPainter;
 
@@ -33,11 +34,8 @@ Future<void> showCar(
       supportedLocales: const [Locale('en'), Locale('zh')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: raceTheme(brightness).copyWith(
-        textTheme: raceTheme(brightness).textTheme.apply(
-          fontFamily: Platform.environment['CAR_PREVIEW_FONT'] == null
-              ? null
-              : 'PreviewFont',
-        ),
+        textTheme: raceTheme(brightness).textTheme
+            .apply(fontFamily: previewFontAvailable ? 'PreviewFont' : null),
       ),
       home: MediaQuery(
         data: MediaQueryData(
@@ -74,18 +72,28 @@ Future<void> showCar(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
-    // Optional local fonts for readable screenshots; never bundled into the app.
-    final path = Platform.environment['CAR_PREVIEW_FONT'];
+    // Optional local fonts make screenshot QA readable; they are never bundled.
+    final candidates = [
+      Platform.environment['CAR_PREVIEW_FONT'],
+      if (Platform.isWindows) r'C:\Windows\Fonts\NotoSansSC-VF.ttf',
+      '../.tools/flutter/engine/src/flutter/txt/third_party/fonts/Roboto-Regular.ttf',
+    ].whereType<String>();
+    final path = candidates
+        .where((candidate) => File(candidate).existsSync())
+        .firstOrNull;
     if (path != null) {
       final loader = FontLoader(
         'PreviewFont',
       )..addFont(File(path).readAsBytes().then((b) => ByteData.sublistView(b)));
       await loader.load();
+      previewFontAvailable = true;
+    }
+    final iconPath =
+        '../.tools/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf';
+    if (File(iconPath).existsSync()) {
       final icons = FontLoader('MaterialIcons')
         ..addFont(
-          File(
-            '../.tools/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-          ).readAsBytes().then((b) => ByteData.sublistView(b)),
+          File(iconPath).readAsBytes().then((b) => ByteData.sublistView(b)),
         );
       await icons.load();
     }
