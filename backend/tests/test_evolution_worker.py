@@ -264,6 +264,21 @@ class PersistenceTests(unittest.TestCase):
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM claim_observations').fetchone()[0], 2)
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM ai_generations').fetchone()[0], 2)
 
+    def test_duplicate_model_updates_share_one_observation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            document = source()
+            validated = validate_batch(extraction(), [document])
+            duplicate_results = [validated.results[0], validated.results[0].model_copy(deep=True)]
+            result = persist_validated(path, [document], duplicate_results, provider='deepseek',
+                                       model='test', prompt_version='p', pipeline_version='v')
+            self.assertEqual(result['inserted'], 1)
+            self.assertEqual(result['observed'], 1)
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_claims').fetchone()[0], 1)
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM claim_observations').fetchone()[0], 1)
+
     def test_source_revisions_and_equal_content_on_different_urls(self):
         with tempfile.TemporaryDirectory() as directory:
             path = f'{directory}/db.sqlite'

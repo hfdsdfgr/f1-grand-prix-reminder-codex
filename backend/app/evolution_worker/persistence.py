@@ -197,10 +197,18 @@ def persist_validated(path: str, documents: list[SourceDocument], results: list[
                         'expected_effect': update.expected_effect, 'status': update.status.value,
                         'component_id': component_id, 'confidence': update.confidence,
                     }, ensure_ascii=False, sort_keys=True)
-                    db.execute('''INSERT INTO claim_observations
-                        (observation_id,claim_id,generation_id,proposed_json,observed_at)
-                        VALUES (?,?,?,?,?)''', (new_id('obs'), claim_id, generation_id, payload, now))
-                    observed += 1
+                    prior_observation = db.execute('''SELECT proposed_json FROM claim_observations
+                        WHERE claim_id=? AND generation_id=?''', (claim_id, generation_id)).fetchone()
+                    if prior_observation is None:
+                        db.execute('''INSERT INTO claim_observations
+                            (observation_id,claim_id,generation_id,proposed_json,observed_at)
+                            VALUES (?,?,?,?,?)''', (new_id('obs'), claim_id, generation_id, payload, now))
+                        observed += 1
+                    elif prior_observation[0] != payload:
+                        conflicts += 1
+                        _open_review(db, 'evolution_claim', claim_id, 'generation_conflict',
+                                     'One model generation proposed conflicting values for the same evidence claim.',
+                                     str(update.confidence), now)
                     lifecycle = db.execute('''SELECT event_id,event_type FROM upgrade_lifecycle_events
                         WHERE claim_id=? LIMIT 1''', (claim_id,)).fetchone()
                     if lifecycle and lifecycle[1] != update.status.value:
