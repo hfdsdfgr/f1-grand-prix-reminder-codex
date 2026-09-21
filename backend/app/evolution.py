@@ -47,6 +47,11 @@ class EvolutionFeed(BaseModel):
     stale: bool = False
 
 
+class EvolutionRaceDetail(BaseModel):
+    race_id: str
+    upgrades: list[UpgradeRead]
+
+
 def load_evolution(path: str, season: int) -> EvolutionFeed:
     with closing(connect(path)) as db:
         db.row_factory = sqlite3.Row
@@ -56,12 +61,14 @@ def load_evolution(path: str, season: int) -> EvolutionFeed:
             JOIN seasons s ON s.season_id=ts.season_id
             JOIN car_component_types c ON c.component_type_id=u.component_type_id
             LEFT JOIN races r ON r.race_id=u.introduced_race_id AND r.season_id=ts.season_id
-            WHERE s.year=? AND (u.introduced_race_id IS NULL OR r.race_id IS NOT NULL)
+            WHERE s.year=? AND u.review_status='published'
+            AND (u.introduced_race_id IS NULL OR r.race_id IS NOT NULL)
             ORDER BY r.round IS NULL,r.round,u.created_at,u.upgrade_id''', (season,)).fetchall()
         source_rows = db.execute('''SELECT us.* FROM upgrade_sources us
             JOIN upgrades u ON u.upgrade_id=us.upgrade_id
             JOIN team_seasons ts ON ts.team_season_id=u.team_season_id
-            JOIN seasons s ON s.season_id=ts.season_id WHERE s.year=?
+            JOIN seasons s ON s.season_id=ts.season_id
+            WHERE s.year=? AND u.review_status='published'
             ORDER BY us.source_id''', (season,)).fetchall()
         race_rows = db.execute('''SELECT r.display_name AS race,r.round
             FROM races r JOIN seasons s ON s.season_id=r.season_id
@@ -94,3 +101,11 @@ def load_evolution(path: str, season: int) -> EvolutionFeed:
     ) for row in race_rows]
     return EvolutionFeed(season=season, upgrades=upgrades, timeline=timeline,
                          updated_at=datetime.now(timezone.utc))
+
+
+def load_race_evolution(path: str, race_id: str) -> EvolutionRaceDetail:
+    season, _ = map(int, race_id.split('-'))
+    feed = load_evolution(path, season)
+    return EvolutionRaceDetail(
+        race_id=race_id, upgrades=[item for item in feed.upgrades if item.race_id == race_id],
+    )

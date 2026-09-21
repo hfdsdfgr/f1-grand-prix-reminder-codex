@@ -53,6 +53,7 @@ class SourceDocument(BaseModel):
     url: HttpUrl
     published_at: datetime | None = None
     fetched_at: datetime
+    publication_phase: Literal['pre_race', 'weekend', 'post_race', 'unknown'] = 'unknown'
     team_ids: list[str] = Field(default_factory=list)
     driver_ids: list[str] = Field(default_factory=list)
     raw_text: str

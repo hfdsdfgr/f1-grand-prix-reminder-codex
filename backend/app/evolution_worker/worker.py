@@ -8,7 +8,9 @@ from datetime import datetime, timedelta, timezone
 
 from app.evolution_worker.llm import DeepSeekProvider, LLMProvider, PIPELINE_VERSION, PROMPT_VERSION
 from app.evolution_worker.sources import EvolutionSourceProvider, TrustedUrlProvider
+from app.evolution_worker.sources import publication_phase
 from app.evolution_worker.validator import validate_batch
+from app.evolution_worker.persistence import persist_validated
 
 
 logger = logging.getLogger('evolution_worker')
@@ -32,13 +34,28 @@ def completed_race(path: str, season: int, round_number: int) -> tuple[str, str]
     return f'{season}-{round_number}', name
 
 
+def race_window(path: str, race_id: str) -> tuple[datetime | None, datetime | None]:
+    with sqlite3.connect(path) as db:
+        row = db.execute('''SELECT scheduled_start,actual_end FROM sessions
+            WHERE race_id=? AND session_type='race' ORDER BY scheduled_start DESC LIMIT 1''',
+                         (race_id,)).fetchone()
+    if row is None or not row[0]:
+        return None, None
+    start = datetime.fromisoformat(row[0].replace('Z', '+00:00'))
+    end = datetime.fromisoformat(row[1].replace('Z', '+00:00')) if row[1] else start + timedelta(hours=4)
+    return start, end
+
+
 async def run_worker(
     race_id: str, urls: list[str], source_provider: EvolutionSourceProvider,
-    llm_provider: LLMProvider,
+    llm_provider: LLMProvider, race_start: datetime | None = None, race_end: datetime | None = None,
 ) -> dict:
     logger.info('Race detected: %s', race_id)
     logger.info('Source discovery started')
     collection = await source_provider.collect(race_id, urls)
+    collection.documents = [item.model_copy(update={
+        'publication_phase': publication_phase(item.published_at, race_start, race_end),
+    }) for item in collection.documents]
     logger.info('Source collection completed: found=%d failed=%d duplicate=%d',
                 len(collection.documents), len(collection.failures), collection.duplicates_skipped)
     if not collection.documents:
@@ -50,6 +67,8 @@ async def run_worker(
     validated = validate_batch(extracted, collection.documents)
     logger.info('Validation completed: results=%d issues=%d', len(validated.results), len(validated.issues))
     return {
+        '_documents': collection.documents,
+        '_validated_results': validated.results,
         'race_id': race_id,
         'job_status': 'partial' if collection.failures else 'completed',
         'review_status': validated.review_status,
@@ -61,7 +80,9 @@ async def run_worker(
         'sources': [{
             'source_id': item.source_id, 'publisher': item.publisher,
             'source_type': item.source_type, 'source_tier': item.source_tier,
-            'title': item.title, 'url': str(item.url), 'content_hash': item.content_hash,
+            'title': item.title, 'url': str(item.url),
+            'published_at': item.published_at.isoformat() if item.published_at else None,
+            'publication_phase': item.publication_phase, 'content_hash': item.content_hash,
         } for item in collection.documents],
         'provider_failures': collection.failures,
         'duplicates_skipped': collection.duplicates_skipped,
@@ -84,13 +105,20 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = parser().parse_args()
-    if not args.dry_run:
-        raise SystemExit('Database writes are intentionally disabled until Phase C acceptance passes; use --dry-run')
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
     race_id, race_name = completed_race(args.database, args.season, args.round_number)
+    race_start, race_end = race_window(args.database, race_id)
     output = asyncio.run(run_worker(
-        race_id, args.source_url, TrustedUrlProvider(), DeepSeekProvider(),
+        race_id, args.source_url, TrustedUrlProvider(), DeepSeekProvider(), race_start, race_end,
     ))
+    documents = output.pop('_documents')
+    validated_results = output.pop('_validated_results')
+    if not args.dry_run:
+        output['persistence'] = persist_validated(
+            args.database, documents, validated_results, provider=output['model_provider'],
+            model=output['model_name'], prompt_version=output['prompt_version'],
+            pipeline_version=output['pipeline_version'],
+        )
     output['race_name'] = race_name
     print(json.dumps(output, ensure_ascii=False, indent=2))
 

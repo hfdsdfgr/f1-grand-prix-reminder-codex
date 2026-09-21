@@ -10,7 +10,7 @@ from app.models import (
     NextRace, ProviderHealthRead, RaceFeed, Race, ScheduleRevisionRead,
 )
 from app.lifecycle import with_lifecycle
-from app.evolution import EvolutionFeed, load_evolution
+from app.evolution import EvolutionFeed, EvolutionRaceDetail, load_evolution, load_race_evolution
 from app.results import (
     ChampionshipImpact, ResultsRepository, ResultsFeed, RaceStory, SeasonRosterFeed,
     StrategyFeed, RaceBriefing, build_race_story,
@@ -110,6 +110,14 @@ def data_health():
 
 
 RaceId = Annotated[str, Path(pattern=r'^(19[5-9][0-9]|20[0-9]{2}|2100)-([1-9][0-9]?)$')]
+
+
+@app.get('/api/v1/evolution/{race_id}', response_model=EvolutionRaceDetail)
+def evolution_race_detail(race_id: RaceId):
+    try:
+        return load_race_evolution(app.state.schedules.path, race_id)
+    except Exception as exc:
+        raise HTTPException(503, 'Race Evolution data is temporarily unavailable.') from exc
 
 
 @app.get('/api/v1/races/{race_id}', response_model=Race)

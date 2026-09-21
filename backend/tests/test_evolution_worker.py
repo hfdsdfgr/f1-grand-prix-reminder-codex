@@ -3,6 +3,7 @@ import os
 import socket
 import tempfile
 import unittest
+from contextlib import closing
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -12,6 +13,12 @@ from app.evolution_worker.llm import DeepSeekProvider
 from app.evolution_worker.models import ExtractionBatch, SourceDocument
 from app.evolution_worker.sources import TrustedUrlProvider, clean_html, deduplicate, validate_public_url
 from app.evolution_worker.validator import validate_batch
+from app.evolution_worker.persistence import persist_validated, review
+from app.data_schema import connect
+from app.models import RaceFeed
+from app.providers.jolpica import normalize
+from app.repositories.schedules import ScheduleRepository
+from test_schedules import sample
 
 
 def public_resolver(host, port):
@@ -148,6 +155,41 @@ class DeepSeekTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen['body']['response_format'], {'type': 'json_object'})
         self.assertEqual(seen['body']['thinking'], {'type': 'disabled'})
         self.assertNotIn('test-secret', json.dumps(seen['body']))
+
+
+class PersistenceTests(unittest.TestCase):
+    def test_pending_events_are_idempotent_and_publishable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            ScheduleRepository(path)._persist(RaceFeed(
+                races=[normalize(sample())], updated_at=datetime.now(timezone.utc),
+            ))
+            with closing(connect(path)) as db, db:
+                season_id = db.execute('SELECT season_id FROM seasons').fetchone()[0]
+                db.execute("INSERT INTO teams(team_id,canonical_name,status,created_at,updated_at) VALUES ('mer','Mercedes','active','2026-01-01','2026-01-01')")
+                db.execute("INSERT INTO team_seasons(team_season_id,team_id,season_id,display_name,status) VALUES ('mer26','mer',?,'Mercedes','active')", (season_id,))
+            batch = ExtractionBatch.model_validate({'results': [{
+                'race_id': '2026-1', 'team_id': 'mercedes', 'updates': [{
+                    'component_id': 'floor', 'change': 'Revised floor geometry', 'goal': None,
+                    'expected_effect': None, 'status': 'tested', 'evidence_level': 'confirmed',
+                    'driver_feedback': [], 'source_ids': ['src_one'], 'confidence': .7,
+                    'evidence': [{'source_id': 'src_one', 'quote': 'tested a revised floor geometry during FP1',
+                                  'supports': ['change', 'status']}],
+                }],
+            }]})
+            validated = validate_batch(batch, [source()])
+            first = persist_validated(path, [source()], validated.results, provider='deepseek',
+                                      model='test', prompt_version='p', pipeline_version='v')
+            second = persist_validated(path, [source()], validated.results, provider='deepseek',
+                                       model='test', prompt_version='p', pipeline_version='v')
+            self.assertEqual(first['inserted'], 1)
+            self.assertEqual(second['inserted'], 0)
+            pending = review(path, 'list')
+            self.assertEqual(len(pending), 1)
+            review(path, 'publish', pending[0]['id'])
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_source_documents').fetchone()[0], 1)
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM upgrades').fetchone()[0], 1)
 
 
 if __name__ == '__main__':

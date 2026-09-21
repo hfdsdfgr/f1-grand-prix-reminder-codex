@@ -79,6 +79,31 @@ def clean_html(html: str) -> tuple[str, str]:
     return title, cleaned
 
 
+def published_at_from_html(html: str) -> datetime | None:
+    match = re.search(
+        r'<meta[^>]+(?:property|name)=["\'](?:article:published_time|date|publishdate)["\'][^>]+content=["\']([^"\']+)',
+        html, re.IGNORECASE,
+    )
+    if not match:
+        return None
+    try:
+        value = datetime.fromisoformat(match.group(1).replace('Z', '+00:00'))
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def publication_phase(published_at: datetime | None, race_start: datetime | None,
+                      race_end: datetime | None) -> str:
+    if not published_at or not race_start or not race_end:
+        return 'unknown'
+    if published_at < race_start:
+        return 'pre_race'
+    if published_at <= race_end:
+        return 'weekend'
+    return 'post_race'
+
+
 def _host_policy(host: str) -> tuple[int, str] | None:
     host = host.rstrip('.').lower()
     for allowed, policy in TRUSTED_HOSTS.items():
@@ -179,7 +204,7 @@ class TrustedUrlProvider(EvolutionSourceProvider):
                 source_id=source_id, race_id=race_id,
                 publisher=urlsplit(current).hostname or 'unknown', source_type=source_type,
                 source_tier=tier, title=title, url=current,
-                fetched_at=datetime.now(timezone.utc), raw_text=raw[:MAX_DOCUMENT_CHARS],
+                published_at=published_at_from_html(raw), fetched_at=datetime.now(timezone.utc), raw_text=raw[:MAX_DOCUMENT_CHARS],
                 cleaned_text=cleaned, content_hash=digest,
             )
         raise ValueError('Source exceeded the redirect limit')

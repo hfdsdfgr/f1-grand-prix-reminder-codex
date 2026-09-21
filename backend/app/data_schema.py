@@ -278,7 +278,8 @@ CREATE TABLE IF NOT EXISTS upgrades (
     introduced_race_id TEXT REFERENCES races(race_id),
     component_type_id TEXT NOT NULL REFERENCES car_component_types(component_type_id),
     title TEXT NOT NULL, change_description TEXT, technical_goal TEXT, expected_effect TEXT,
-    status TEXT NOT NULL, confidence TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    status TEXT NOT NULL, confidence TEXT NOT NULL, review_status TEXT NOT NULL DEFAULT 'published',
+    event_fingerprint TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS specification_upgrades (
     specification_id TEXT NOT NULL REFERENCES car_specifications(specification_id),
@@ -323,6 +324,17 @@ CREATE TABLE IF NOT EXISTS source_snapshot_items (
     entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, content_hash TEXT NOT NULL,
     PRIMARY KEY(snapshot_id, entity_type, entity_id)
 );
+CREATE TABLE IF NOT EXISTS evolution_source_documents (
+    source_id TEXT PRIMARY KEY, race_id TEXT NOT NULL REFERENCES races(race_id),
+    publisher TEXT NOT NULL, source_type TEXT NOT NULL, publication_phase TEXT NOT NULL,
+    url TEXT NOT NULL UNIQUE, published_at TEXT, fetched_at TEXT NOT NULL,
+    cleaned_text TEXT NOT NULL, content_hash TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS evolution_upgrade_sources (
+    upgrade_id TEXT NOT NULL REFERENCES upgrades(upgrade_id),
+    source_id TEXT NOT NULL REFERENCES evolution_source_documents(source_id),
+    PRIMARY KEY(upgrade_id, source_id)
+);
 CREATE TABLE IF NOT EXISTS ai_generations (
     generation_id TEXT PRIMARY KEY, provider TEXT NOT NULL, model TEXT NOT NULL,
     prompt_version TEXT NOT NULL, pipeline_version TEXT NOT NULL, generated_at TEXT,
@@ -361,6 +373,8 @@ CREATE INDEX IF NOT EXISTS idx_raw_source_lookup
     ON raw_source_records(provider_id, external_id, retrieved_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_dedup
     ON interviews(driver_id, race_id, content_hash) WHERE content_hash IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_review_entity
+    ON review_items(entity_type, entity_id) WHERE entity_id IS NOT NULL;
 '''
 
 
@@ -424,6 +438,11 @@ def migrate(path: str) -> None:
         _add_missing_columns(db, 'race_external_identities', {
             'external_name': 'TEXT', 'last_verified_at': 'TEXT',
         })
+        _add_missing_columns(db, 'upgrades', {
+            'review_status': "TEXT NOT NULL DEFAULT 'published'", 'event_fingerprint': 'TEXT',
+        })
+        db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrade_fingerprint
+            ON upgrades(event_fingerprint) WHERE event_fingerprint IS NOT NULL''')
         db.execute('''INSERT OR IGNORE INTO providers
             (provider_id,name,type,base_url,priority,status,created_at,updated_at)
             VALUES (?,?,?,?,?,?,?,?)''', (
@@ -441,6 +460,7 @@ def migrate(path: str) -> None:
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (7, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (8, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (9, ?)', (now,))
+        db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (10, ?)', (now,))
         db.execute('PRAGMA foreign_keys = ON')
 
 
