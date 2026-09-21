@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -119,6 +120,24 @@ void main() {
       }
     },
   );
+
+  test('rejects broken generation and component references', () async {
+    final source = jsonDecode(
+      await rootBundle.loadString('assets/evolution/car.json'),
+    ) as Map<String, dynamic>;
+    final brokenGeneration =
+        jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    (brokenGeneration['carModels'] as List)[2]['previous_car_model_id'] =
+        'missing_model';
+    expect(() => CarModel(brokenGeneration), throwsFormatException);
+
+    final brokenComponent =
+        jsonDecode(jsonEncode(source)) as Map<String, dynamic>;
+    ((brokenComponent['carModels'] as List)[2]['compare_changes']
+            as List)[0]['component_id'] =
+        'missing_component';
+    expect(() => CarModel(brokenComponent), throwsFormatException);
+  });
 
   testWidgets('native gestures, keyboard, presets and 13 component details', (
     t,

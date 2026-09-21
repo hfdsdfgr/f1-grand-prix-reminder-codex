@@ -95,24 +95,59 @@ class CarModel {
   final List<CarComponent> components;
   final Map<String, Map<String, Color>> materials;
   final List<Map<String, dynamic>> archives;
-  CarModel(Map<String, dynamic> json)
-    : components = (json['components'] as List)
-          .map((c) => CarComponent(c))
-          .toList(),
-      materials = (json['materials'] as Map<String, dynamic>).map(
-        (team, colors) => MapEntry(
-          team,
-          (colors as Map<String, dynamic>).map(
-            (key, value) => MapEntry(
-              key,
-              Color(
-                int.parse((value as String).replaceFirst('#', 'ff'), radix: 16),
-              ),
+  CarModel._(this.components, this.materials, this.archives);
+
+  factory CarModel(Map<String, dynamic> json) {
+    final components = (json['components'] as List)
+        .map((c) => CarComponent(c))
+        .toList();
+    final materials = (json['materials'] as Map<String, dynamic>).map(
+      (team, colors) => MapEntry(
+        team,
+        (colors as Map<String, dynamic>).map(
+          (key, value) => MapEntry(
+            key,
+            Color(
+              int.parse((value as String).replaceFirst('#', 'ff'), radix: 16),
             ),
           ),
         ),
       ),
-      archives = (json['carModels'] as List).cast<Map<String, dynamic>>();
+    );
+    final archives = (json['carModels'] as List).cast<Map<String, dynamic>>();
+    _validate(components, archives);
+    return CarModel._(components, materials, archives);
+  }
+
+  static void _validate(
+    List<CarComponent> components,
+    List<Map<String, dynamic>> archives,
+  ) {
+    final componentIds = components.map((part) => part.id).toSet();
+    final archiveIds = archives.map((car) => car['car_model_id']).toSet();
+    if (componentIds.length != components.length ||
+        componentIds.length != carComponentIds.length ||
+        !componentIds.containsAll(carComponentIds) ||
+        archiveIds.length != archives.length ||
+        archiveIds.any((id) => id is! String || id.isEmpty)) {
+      throw const FormatException(
+        'Invalid Evolution component or car model ID.',
+      );
+    }
+    for (final archive in archives) {
+      final previous = archive['previous_car_model_id'];
+      if (previous != null && !archiveIds.contains(previous)) {
+        throw FormatException('Unknown previous car model: $previous');
+      }
+      for (final change in (archive['compare_changes'] as List? ?? const [])) {
+        final component = (change as Map<String, dynamic>)['component_id'];
+        if (component is! String || !componentIds.contains(component)) {
+          throw FormatException('Unknown comparison component: $component');
+        }
+      }
+    }
+  }
+
   static Future<CarModel> load() async => CarModel(
     jsonDecode(await rootBundle.loadString('assets/evolution/car.json'))
         as Map<String, dynamic>,
