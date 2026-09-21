@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/language.dart';
 import 'car_model.dart';
+import 'compare_panel.dart';
 import 'gltf_car_stage.dart';
 
 class CarViewer extends StatefulWidget {
@@ -29,8 +30,10 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
   final _gltfController = GltfCarController();
   double _yaw = -.65, _pitch = .55, _zoom = 1, _startZoom = 1;
   String _selected = 'front_wing', _team = 'neutral', _archive = 'generic';
+  String? _compareArchive;
   bool _labels = true, _wire = false;
   bool _focusMode = false, _exploded = false, _technical = false;
+  bool _compareMode = false;
   bool _gltfReady = false, _gltfUnavailable = false;
   late final AnimationController _focusAnimation = AnimationController(
     vsync: this,
@@ -82,6 +85,15 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
   void _toggleFocus() {
     setState(() => _focusMode = !_focusMode);
     _animate(_focusAnimation, _focusMode);
+  }
+
+  void _focusPart(String componentId) {
+    if (!carComponentIds.contains(componentId)) return;
+    setState(() {
+      _selected = componentId;
+      _focusMode = true;
+    });
+    _animate(_focusAnimation, true);
   }
 
   void _toggleExploded() {
@@ -153,6 +165,36 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
       final archives = model.archives.where((c) => c['team'] == _team).toList();
       final matches = archives.where((c) => c['car_model_id'] == _archive);
       final archive = matches.isEmpty ? null : matches.first;
+      final compareCandidates = archives
+          .where(
+            (c) =>
+                archive != null &&
+                (c['season'] as int) < (archive['season'] as int),
+          )
+          .toList();
+      final preferredCompare =
+          _compareArchive ?? archive?['previous_car_model_id'] as String?;
+      final compareMatches = compareCandidates.where(
+        (c) => c['car_model_id'] == preferredCompare,
+      );
+      final comparison = compareMatches.isNotEmpty
+          ? compareMatches.first
+          : compareCandidates.firstOrNull;
+      final changes =
+          archive?['previous_car_model_id'] == comparison?['car_model_id'] &&
+              archive?['compare_changes'] is List
+          ? (archive!['compare_changes'] as List)
+                .cast<Map<String, dynamic>>()
+                .map(
+                  (change) => CompareChange(
+                    componentId: change['component_id'] as String,
+                    component: tr(context, change['component'] as String),
+                    change: change['change'] as String,
+                    status: change['status'] as String,
+                  ),
+                )
+                .toList()
+          : const <CompareChange>[];
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -180,6 +222,8 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                   onSelected: (_) => setState(() {
                     _team = team.key;
                     _archive = 'generic';
+                    _compareArchive = null;
+                    _compareMode = false;
                   }),
                 ),
             ],
@@ -202,7 +246,18 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                 ),
             ],
             onChanged: (value) {
-              if (value != null) setState(() => _archive = value);
+              if (value != null) {
+                final selected = archives.where(
+                  (car) => car['car_model_id'] == value,
+                );
+                setState(() {
+                  _archive = value;
+                  _compareArchive = selected.isEmpty
+                      ? null
+                      : selected.first['previous_car_model_id'] as String?;
+                  _compareMode = false;
+                });
+              }
             },
           ),
           const SizedBox(height: 8),
@@ -399,6 +454,15 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                 selected: _technical,
                 onSelected: (value) => setState(() => _technical = value),
               ),
+              FilterChip(
+                key: const ValueKey('compare-mode'),
+                avatar: const Icon(Icons.compare_arrows, size: 18),
+                label: Text(tr(context, 'Compare')),
+                selected: _compareMode,
+                onSelected: archive != null && comparison != null
+                    ? (value) => setState(() => _compareMode = value)
+                    : null,
+              ),
             ],
           ),
           Wrap(
@@ -440,6 +504,41 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
             ],
           ),
           const SizedBox(height: 12),
+          if (_compareMode && archive != null && comparison != null) ...[
+            Text(
+              tr(context, 'Generation Compare'),
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              key: ValueKey(
+                'compare-${archive['car_model_id']}-${comparison['car_model_id']}',
+              ),
+              initialValue: comparison['car_model_id'] as String,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: tr(context, 'Previous')),
+              items: [
+                for (final car in compareCandidates)
+                  DropdownMenuItem(
+                    value: car['car_model_id'] as String,
+                    child: Text('${car['season']} / ${car['name']}'),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _compareArchive = value),
+            ),
+            const SizedBox(height: 16),
+            EvolutionComparePanel(
+              previous: '${comparison['season']} / ${comparison['name']}',
+              current: '${archive['season']} / ${archive['name']}',
+              changes: changes,
+              geometryAvailable:
+                  comparison['base_3d_model_id'] != null &&
+                  archive['base_3d_model_id'] != null &&
+                  comparison['base_3d_model_id'] != archive['base_3d_model_id'],
+              onComponentSelected: _focusPart,
+            ),
+            const SizedBox(height: 12),
+          ],
           DropdownButtonFormField<String>(
             key: ValueKey('component-$_selected'),
             initialValue: _selected,
@@ -499,6 +598,39 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
             value: _wire,
             onChanged: (v) => setState(() => _wire = v),
           ),
+          if (archives.isNotEmpty)
+            ExpansionTile(
+              key: ValueKey('heritage-$_team'),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: Text(tr(context, 'Heritage')),
+              children: [
+                for (final car
+                    in archives.toList()..sort(
+                      (a, b) =>
+                          (a['season'] as int).compareTo(b['season'] as int),
+                    ))
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    selected: car['car_model_id'] == _archive,
+                    title: Text(car['name'] as String),
+                    subtitle: Text('${car['season']}'),
+                    onTap: () => setState(() {
+                      _archive = car['car_model_id'] as String;
+                      _compareArchive = car['previous_car_model_id'] as String?;
+                      _compareMode = false;
+                    }),
+                    trailing: car['official_url'] == null
+                        ? null
+                        : IconButton(
+                            tooltip: tr(context, 'Official Car'),
+                            onPressed: () =>
+                                _official(car['official_url'] as String),
+                            icon: const Icon(Icons.open_in_new),
+                          ),
+                  ),
+              ],
+            ),
         ],
       );
     },

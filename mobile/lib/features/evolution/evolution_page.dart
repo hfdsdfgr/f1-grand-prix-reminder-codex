@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/language.dart';
 import '../../data/race_repository.dart';
 import 'car_viewer.dart';
+import 'compare_panel.dart';
 
 class EvolutionPage extends StatefulWidget {
   final RaceRepository repository;
@@ -21,6 +22,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
   int _season = DateTime.now().year;
   String? _team, _race;
   String? _selectedUpgrade, _highlightedComponent, _highlightedTeam;
+  bool _compareSpecification = false;
   late Future<EvolutionFeed> _request = widget.repository.evolution(_season);
 
   void _load() => setState(() {
@@ -66,6 +68,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                     _race = null;
                     _highlightedTeam = null;
                     _clearSelection();
+                    _compareSpecification = false;
                     _load();
                   }
                 : null,
@@ -86,6 +89,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                     _race = null;
                     _highlightedTeam = null;
                     _clearSelection();
+                    _compareSpecification = false;
                     _load();
                   }
                 : null,
@@ -164,6 +168,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                     _race = null;
                     _highlightedTeam = value;
                     _clearSelection();
+                    _compareSpecification = false;
                   }),
                 ),
                 const SizedBox(height: 16),
@@ -185,6 +190,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                         onSelected: (_) => setState(() {
                           _race = null;
                           _clearSelection();
+                          _compareSpecification = false;
                         }),
                       ),
                       for (final event in feed.timeline)
@@ -211,7 +217,10 @@ class _EvolutionPageState extends State<EvolutionPage> {
                                 ),
                                 selected: race == event.raceId,
                                 onSelected: (_) {
-                                  setState(() => _race = event.raceId);
+                                  setState(() {
+                                    _race = event.raceId;
+                                    _compareSpecification = false;
+                                  });
                                   if (hasUpgrade) {
                                     _selectUpgrade(upgrades.first);
                                   } else {
@@ -243,9 +252,50 @@ class _EvolutionPageState extends State<EvolutionPage> {
                           child: Text(tr(context, r.value)),
                         ),
                     ],
-                    onChanged: (value) => setState(() => _race = value),
+                    onChanged: (value) => setState(() {
+                      _race = value;
+                      _compareSpecification = false;
+                      _clearSelection();
+                    }),
                   ),
                 const SizedBox(height: 24),
+                if (race != null && entries.isNotEmpty) ...[
+                  FilterChip(
+                    key: const ValueKey('specification-compare'),
+                    avatar: const Icon(Icons.compare_arrows, size: 18),
+                    label: Text(tr(context, 'Specification Compare')),
+                    selected: _compareSpecification,
+                    onSelected: (value) =>
+                        setState(() => _compareSpecification = value),
+                  ),
+                  if (_compareSpecification) ...[
+                    const SizedBox(height: 16),
+                    EvolutionComparePanel(
+                      previous: tr(context, 'Launch specification'),
+                      current: tr(context, entries.first.race ?? race),
+                      changes: [
+                        for (final entry in entries)
+                          CompareChange(
+                            componentId: entry.componentId ?? '',
+                            component: tr(context, entry.component),
+                            change:
+                                entry.change ?? tr(context, 'Not available'),
+                            goal: entry.goal,
+                            expectedEffect: entry.expectedEffect,
+                            status: entry.status,
+                          ),
+                      ],
+                      geometryAvailable: false,
+                      onComponentSelected: (componentId) {
+                        final match = entries.where(
+                          (entry) => entry.componentId == componentId,
+                        );
+                        if (match.isNotEmpty) _selectUpgrade(match.first);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ],
                 for (final entry in entries)
                   _UpgradeDetails(
                     key: ValueKey(entry.id),

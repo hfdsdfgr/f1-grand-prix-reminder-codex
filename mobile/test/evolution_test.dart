@@ -108,6 +108,18 @@ void main() {
       find.byKey(const ValueKey('car-canvas')),
     );
     expect((car.painter! as CarPainter).selected, 'floor');
+    final compare = find.byKey(const ValueKey('specification-compare'));
+    await tester.ensureVisible(compare);
+    await tester.tap(compare);
+    await tester.pumpAndSettle();
+    expect(find.text('Launch specification'), findsOneWidget);
+    expect(find.textContaining('New edge'), findsOneWidget);
+    expect(
+      tester
+          .widget<SwitchListTile>(find.byKey(const ValueKey('ghost-compare')))
+          .onChanged,
+      isNull,
+    );
     await tester.ensureVisible(find.byType(ExpansionTile));
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();

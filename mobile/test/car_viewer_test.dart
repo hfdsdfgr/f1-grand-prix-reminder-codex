@@ -96,7 +96,17 @@ void main() {
       expect(model.components.map((c) => c.id).toSet().length, 13);
       expect(model.components.fold<int>(0, (s, c) => s + c.faces.length), 900);
       expect(model.materials.length, 5);
-      expect(model.archives.single['base_3d_model_id'], isNull);
+      expect(model.archives.length, 4);
+      expect(
+        model.archives.every((car) => car['base_3d_model_id'] == null),
+        isTrue,
+      );
+      expect(
+        model.archives
+            .where((car) => car['team'] == 'redbull')
+            .map((car) => car['name']),
+        ['RB19', 'RB20', 'RB21'],
+      );
       for (final c in model.components) {
         expect(c.text(true).length, 4);
         expect(c.text(false).length, 4);
@@ -115,7 +125,7 @@ void main() {
   ) async {
     addTearDown(t.view.resetPhysicalSize);
     addTearDown(t.view.resetDevicePixelRatio);
-    await showCar(t);
+    await showCar(t, brightness: Brightness.dark);
     final start = painter(t).yaw;
     await t.drag(canvas, const Offset(70, 20));
     await t.pump();
@@ -219,6 +229,50 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Official Car'), findsNothing);
     expect(painter(t).team, 'mclaren');
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('generation compare uses sourced changes and gates ghost view', (
+    t,
+  ) async {
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    await showCar(t, brightness: Brightness.dark);
+    await t.tap(find.text('Red Bull'));
+    await t.pumpAndSettle();
+    t
+        .widget<DropdownButtonFormField<String>>(
+          find.byKey(const ValueKey('archive-redbull-generic')),
+        )
+        .onChanged!('red_bull_rb20');
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.byKey(const ValueKey('compare-mode')));
+    await t.tap(find.byKey(const ValueKey('compare-mode')));
+    await t.pumpAndSettle();
+    expect(find.text('Generation Compare'), findsOneWidget);
+    expect(find.text('2023 / RB19'), findsWidgets);
+    expect(find.text('2024 / RB20'), findsWidgets);
+    expect(
+      find.textContaining(
+        'The official team page identifies updated cooling and sidepods.',
+      ),
+      findsOneWidget,
+    );
+    final ghost = t.widget<SwitchListTile>(
+      find.byKey(const ValueKey('ghost-compare')),
+    );
+    expect(ghost.onChanged, isNull);
+    final sidepods = find.byKey(const ValueKey('compare-component-sidepods'));
+    await t.ensureVisible(sidepods);
+    await t.tap(sidepods);
+    await t.pumpAndSettle();
+    expect(painter(t).selected, 'sidepods');
+    expect(painter(t).focus, 1);
+    await t.ensureVisible(find.byKey(const ValueKey('heritage-redbull')));
+    await t.tap(find.byKey(const ValueKey('heritage-redbull')));
+    await t.pumpAndSettle();
+    expect(find.text('RB19'), findsWidgets);
+    expect(find.text('RB21'), findsWidgets);
     expect(t.takeException(), isNull);
   });
 

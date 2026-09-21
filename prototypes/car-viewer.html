@@ -140,7 +140,18 @@ function drawLabels(){
  }
 }
 // Only source-verified identity records; no invented specification/component variants.
-const carModels=[{car_model_id:'prototype_ferrari_sf23',team:'ferrari',name:'SF-23',season:2023,base_3d_model_id:null,official_url:'https://www.ferrari.com/en-US/formula1/sf-23'}];
+const carModels=[
+ {car_model_id:'prototype_ferrari_sf23',team:'ferrari',name:'SF-23',season:2023,base_3d_model_id:null,official_url:'https://www.ferrari.com/en-US/formula1/sf-23'},
+ {car_model_id:'red_bull_rb19',team:'redbull',name:'RB19',season:2023,base_3d_model_id:null,official_url:'https://www.redbullracing.com/int-en/cars/rb19',compare_changes:[]},
+ {car_model_id:'red_bull_rb20',team:'redbull',name:'RB20',season:2024,base_3d_model_id:null,official_url:'https://www.redbullracing.com/int-en/cars/rb20',previous_car_model_id:'red_bull_rb19',compare_changes:[
+  {component_id:'front_wing',component:'Front Wing',change:'The official team page identifies an altered front wing.',status:'introduced'},
+  {component_id:'sidepods',component:'Sidepods',change:'The official team page identifies updated cooling and sidepods.',status:'introduced'}
+ ]},
+ {car_model_id:'red_bull_rb21',team:'redbull',name:'RB21',season:2025,base_3d_model_id:null,official_url:'https://www.redbullracing.com/int-en/cars/rb21',previous_car_model_id:'red_bull_rb20',compare_changes:[
+  {component_id:'floor',component:'Floor',change:'The official team page identifies updates to the floor.',status:'introduced'},
+  {component_id:'sidepods',component:'Sidepods',change:'The official team page identifies cooling updates.',status:'introduced'}
+ ]}
+];
 function updateGeneration(){
  $('generation').replaceChildren(new Option('通用技术示意 · 非真实车型','generic'));
  for(const c of carModels.filter(c=>c.team===state.team))$('generation').add(new Option(`${c.season} / ${c.name} · 几何待建模`,c.car_model_id));
