@@ -1,13 +1,28 @@
-# Evolution 开发进度
+# Evolution 当前状态
 
-2026-09-21：已将确认后的 HTML Phase 1 原型应用到 Flutter Evolution 界面。真实界面现在使用同源生成的低多边形底模、13 个稳定部件 ID、车队风格配色、动态标注、部件详情草稿、车型档案和受来源约束的官方链接。真实世代差异、人工知识审核、Focus、爆炸图、Technical View 和 Compare 均未实现。详见 [原型验收报告](evolution-prototype-phase1.md)。下文 Phase 4/5/6 是旧总项目路线阶段，不等于新设计规范的阶段。
+Evolution 已按 `EVOLUTION设计规范.txt` 完成可由现有数据支持的 Phase 1、Phase 2 和 Phase 3 主流程。Flutter 页面提供轻量低多边形赛车、稳定部件选择、动态标签、Focus、爆炸/组装、Technical/Livery、赛季升级时间线、代际/规格对比及 Heritage。实现详情和验收边界见 [Evolution 实现报告](evolution-implementation-report.md)。
 
-Phase 4：赛季升级档案读接口与时间线已接入。按赛季、车队、大奖赛筛选，展开查看变化、目标、预期效果与原始来源。设备离线缓存沿用现有机制。
+## 已接通能力
 
-`GET /api/v1/evolution?season=2026` 从现有升级表读取数据；迁移 9 新增 `upgrade_sources`，逐项保存发布者、URL、发布时间、抓取时间与原文。缺少有效 HTTP(S) 来源或原文的升级不发布到读接口。测试数据仅存在临时测试数据库。真实升级资料的采集和审核尚待接入，当前生产档案允许为空。
+- `mobile/assets/evolution/universal-car.glb` 包含 13 个独立可寻址部件，共用一套 Universal F1 Base。
+- Flutter Scene 提供深度渲染和射线点击；不支持该渲染路径时保留同源 Canvas 降级。
+- 车队配色由数据中的材质表驱动，不复制模型文件。
+- `GET /api/v1/evolution?season=<year>` 返回升级档案和比赛时间线；升级记录通过稳定 `component_id` 驱动 3D 高亮。
+- RB19、RB20、RB21 的车型身份、官方链接和文本对比只使用已记录的官方来源结论。
+- Generation Compare、Specification Compare 与 Heritage 已接入；Ghost Compare 只在双方具有不同且经过验证的 `base_3d_model_id` 时启用。
 
-下一步 Phase 5：交互优先的 Generic Formula Car。共用一套低精度模型，优先保证旋转、缩放、部件点击、选择高亮、聚焦与连线标注；以键盘和按钮提供替代操作。仅进入 Evolution 时加载。模型精度服从加载速度、帧率和内存占用。
+## 数据边界
 
-Phase 5 当前实现：Evolution 按需加载随 APK 打包的通用赛车数据，由 Flutter 原生 Canvas 绘制细化的低多边形车身、轮胎、悬架、Halo、座舱和翼面。支持拖动旋转、双指及滚轮缩放、点击部件、下拉选择 13 类部件、选择高亮、动态标注、预设视角和键盘/按钮替代操作。模型不代表真实车队规格；GLB 已生成但真实界面尚未采用 glTF 渲染器。真机手势和帧率仍需人工验收。
+- 通用赛车属于 Technical Illustration，不是具体车型的 CAD 重建。
+- 13 项部件说明仍标记为 `review: pending`，完成专家人工审核前保持“静态草稿”提示。
+- 当前车型的 `base_3d_model_id` 均为空，因此代际切换复用通用几何；界面不暗示存在真实几何差异。
+- Ghost Compare 当前显示前置条件说明，不用同一几何伪造叠加差异。
+- 生产升级档案允许为空；只有具备有效来源和原文的升级才由 Backend 发布。
 
-Phase 6 再连接升级记录与部件高亮、前后对比和有来源的车手反馈。
+## 后续数据工作
+
+1. 由合适的 F1 技术审核者审核 13 项基础部件知识并更新 review 状态。
+2. 根据可靠公开资料制作至少两个具有可观察差异的替换组件资产，登记不同 `base_3d_model_id` 后再启用 Ghost Compare。
+3. 持续录入经过来源审核的赛季升级、规格生命周期与车手反馈。
+
+以上工作是内容与资产审核，不需要重写现有 Rotation、Renderer、Reminder 或 Calendar。
