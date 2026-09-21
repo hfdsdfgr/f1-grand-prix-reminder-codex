@@ -1,0 +1,17 @@
+[Unit]
+Description=GrandPrixReminder post-race scheduler
+After=network-online.target grandprixreminder.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/grandprixreminder/backend
+Environment=DATABASE_PATH=/opt/grandprixreminder/backend/data/schedules.db
+EnvironmentFile=-/etc/grandprixreminder.env
+ExecStart=/opt/grandprixreminder/backend/venv/bin/python -m app.post_race_scheduler
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -430,6 +430,24 @@ CREATE TABLE IF NOT EXISTS review_items (
     issue_type TEXT NOT NULL, description TEXT NOT NULL, confidence TEXT,
     status TEXT NOT NULL, created_at TEXT NOT NULL, resolved_at TEXT
 );
+CREATE TABLE IF NOT EXISTS post_race_jobs (
+    job_id TEXT PRIMARY KEY,
+    race_id TEXT NOT NULL REFERENCES races(race_id) ON DELETE CASCADE,
+    public_race_id TEXT NOT NULL,
+    worker_type TEXT NOT NULL CHECK(worker_type IN ('evolution','briefing')),
+    processing_stage TEXT NOT NULL CHECK(processing_stage IN ('initial','supplemental','final')),
+    finish_detection_method TEXT NOT NULL CHECK(finish_detection_method IN
+        ('provider_confirmed','schedule_fallback','replay')),
+    scheduled_at TEXT NOT NULL, next_attempt_at TEXT NOT NULL,
+    started_at TEXT, completed_at TEXT,
+    status TEXT NOT NULL CHECK(status IN
+        ('scheduled','running','completed','failed','retry_pending')),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),
+    error TEXT, sources_found INTEGER, sources_fetched INTEGER,
+    claims_inserted INTEGER, claims_observed INTEGER,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+    UNIQUE(public_race_id,worker_type,processing_stage)
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     audit_id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,
     action TEXT NOT NULL, previous_value TEXT, new_value TEXT,
@@ -445,6 +463,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_dedup
     ON interviews(driver_id, race_id, content_hash) WHERE content_hash IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_review_pending_entity
     ON review_items(entity_type, entity_id) WHERE entity_id IS NOT NULL AND status='pending_review';
+CREATE INDEX IF NOT EXISTS idx_post_race_jobs_due
+    ON post_race_jobs(status,next_attempt_at);
 '''
 
 
@@ -658,6 +678,7 @@ def migrate(path: str) -> None:
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (9, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (10, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (11, ?)', (now,))
+        db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (12, ?)', (now,))
         db.execute('PRAGMA foreign_keys = ON')
 
 

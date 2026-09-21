@@ -95,6 +95,26 @@ async def run_worker(
     }
 
 
+async def execute_evolution(path: str, race_id: str, urls: list[str], *, dry_run: bool = False,
+                            source_provider: EvolutionSourceProvider | None = None,
+                            llm_provider: LLMProvider | None = None) -> dict:
+    """Shared Evolution entry point for CLI and post-race automation."""
+    race_start, race_end = race_window(path, race_id)
+    output = await run_worker(
+        race_id, urls, source_provider or TrustedUrlProvider(),
+        llm_provider or DeepSeekProvider(), race_start, race_end,
+    )
+    documents = output.pop('_documents')
+    validated_results = output.pop('_validated_results')
+    if not dry_run:
+        output['persistence'] = persist_validated(
+            path, documents, validated_results, provider=output['model_provider'],
+            model=output['model_name'], prompt_version=output['prompt_version'],
+            pipeline_version=output['pipeline_version'],
+        )
+    return output
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description='Extract sourced post-race Evolution data')
     result.add_argument('--season', type=int, required=True)
@@ -110,18 +130,9 @@ def main() -> None:
     args = parser().parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
     race_id, race_name = completed_race(args.database, args.season, args.round_number)
-    race_start, race_end = race_window(args.database, race_id)
-    output = asyncio.run(run_worker(
-        race_id, args.source_url, TrustedUrlProvider(), DeepSeekProvider(), race_start, race_end,
+    output = asyncio.run(execute_evolution(
+        args.database, race_id, args.source_url, dry_run=args.dry_run,
     ))
-    documents = output.pop('_documents')
-    validated_results = output.pop('_validated_results')
-    if not args.dry_run:
-        output['persistence'] = persist_validated(
-            args.database, documents, validated_results, provider=output['model_provider'],
-            model=output['model_name'], prompt_version=output['prompt_version'],
-            pipeline_version=output['pipeline_version'],
-        )
     output['race_name'] = race_name
     print(json.dumps(output, ensure_ascii=False, indent=2))
 
