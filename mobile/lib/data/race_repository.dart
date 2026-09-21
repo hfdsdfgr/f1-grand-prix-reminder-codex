@@ -228,7 +228,8 @@ class RaceRepository {
 
 class UpgradeEntry {
   final String id, teamId, team, component, title, status, confidence;
-  final String? raceId, race, change, goal, expectedEffect;
+  final String? raceId, race, componentId, change, goal, expectedEffect;
+  final int? round;
   final List<BriefingSource> sources;
   UpgradeEntry(Map<String, dynamic> json)
     : id = json['id'] as String,
@@ -240,6 +241,8 @@ class UpgradeEntry {
       confidence = json['confidence'] as String,
       raceId = json['race_id'] as String?,
       race = json['race'] as String?,
+      round = json['round'] as int?,
+      componentId = json['component_id'] as String?,
       change = json['change'] as String?,
       goal = json['goal'] as String?,
       expectedEffect = json['expected_effect'] as String?,
@@ -248,12 +251,27 @@ class UpgradeEntry {
           .toList();
 }
 
+class EvolutionTimelineEvent {
+  final String raceId, race;
+  final int round;
+  final List<String> upgradeIds;
+  EvolutionTimelineEvent(Map<String, dynamic> json)
+    : raceId = json['race_id'] as String,
+      race = json['race'] as String,
+      round = json['round'] as int,
+      upgradeIds = List<String>.from(json['upgrade_ids'] as List);
+}
+
 class EvolutionFeed {
   final List<UpgradeEntry> upgrades;
+  final List<EvolutionTimelineEvent> timeline;
   final bool stale;
   EvolutionFeed(Map<String, dynamic> json, {bool cached = false})
     : upgrades = (json['upgrades'] as List)
           .map((u) => UpgradeEntry(u as Map<String, dynamic>))
+          .toList(),
+      timeline = (json['timeline'] as List<dynamic>? ?? const [])
+          .map((event) => EvolutionTimelineEvent(event as Map<String, dynamic>))
           .toList(),
       stale = cached || (json['stale'] as bool? ?? false);
 }

@@ -166,7 +166,16 @@ void main() {
     expect(painter(t).pitch, .55);
     expect(painter(t).zoom, 1);
     expect(find.text('Power Unit'), findsNothing);
-    expect(find.text('Focus component'), findsNothing);
+    await t.ensureVisible(find.byKey(const ValueKey('focus-mode')));
+    await t.tap(find.byKey(const ValueKey('focus-mode')));
+    await t.pumpAndSettle();
+    expect(painter(t).focus, 1);
+    await t.tap(find.byKey(const ValueKey('exploded-mode')));
+    await t.pumpAndSettle();
+    expect(painter(t).exploded, 1);
+    await t.tap(find.byKey(const ValueKey('technical-mode')));
+    await t.pump();
+    expect(painter(t).technical, isTrue);
     expect(t.takeException(), isNull);
   });
 

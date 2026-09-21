@@ -4,6 +4,47 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 
 typedef CarPoint = (double, double, double);
+
+const carComponentIds = {
+  'front_wing',
+  'nose',
+  'front_suspension',
+  'front_wheels',
+  'halo',
+  'cockpit',
+  'sidepods',
+  'floor',
+  'engine_cover',
+  'rear_suspension',
+  'rear_wheels',
+  'beam_wing',
+  'rear_wing',
+};
+
+CarPoint carPartOffset(String id) => switch (id) {
+  'front_wing' => (0, 0, -.72),
+  'nose' => (0, .08, -.32),
+  'front_suspension' => (-.28, .08, -.22),
+  'front_wheels' => (-.52, .04, -.18),
+  'halo' => (0, .48, 0),
+  'cockpit' => (0, .26, 0),
+  'sidepods' => (.42, .04, 0),
+  'floor' => (0, -.42, 0),
+  'engine_cover' => (-.34, .24, .15),
+  'rear_suspension' => (.28, .08, .22),
+  'rear_wheels' => (.52, .04, .18),
+  'beam_wing' => (0, .08, .48),
+  'rear_wing' => (0, .34, .68),
+  _ => (0, 0, 0),
+};
+
+String carTeamKey(String? teamId) => switch (teamId) {
+  'ferrari' => 'ferrari',
+  'mclaren' => 'mclaren',
+  'mercedes' => 'mercedes',
+  'red_bull' || 'redbull' => 'redbull',
+  _ => 'neutral',
+};
 CarPoint _point(List<dynamic> v) => (
   (v[0] as num).toDouble(),
   (v[1] as num).toDouble(),

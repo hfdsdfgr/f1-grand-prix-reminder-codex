@@ -34,6 +34,9 @@ class EvolutionTests(unittest.TestCase):
             self.assertEqual([u.id for u in feed.upgrades], ['sourced'])
             self.assertEqual(feed.upgrades[0].race_id, '2026-1')
             self.assertEqual(feed.upgrades[0].status, 'tested')
+            self.assertEqual(feed.upgrades[0].component_id, 'floor')
+            self.assertEqual(feed.timeline[0].race_id, '2026-1')
+            self.assertEqual(feed.timeline[0].upgrade_ids, ['sourced'])
             self.assertEqual(load_evolution(path, 2025).upgrades, [])
             with closing(connect(path)) as db, db:
                 db.execute("UPDATE upgrade_sources SET url='javascript:alert(1)'")

@@ -10,24 +10,60 @@ import 'car_model.dart';
 import 'gltf_car_stage.dart';
 
 class CarViewer extends StatefulWidget {
-  const CarViewer({super.key, this.enableGltf = true});
+  const CarViewer({
+    super.key,
+    this.enableGltf = true,
+    this.highlightedComponentId,
+    this.highlightedTeamId,
+  });
 
   final bool enableGltf;
+  final String? highlightedComponentId, highlightedTeamId;
   @override
   State<CarViewer> createState() => _CarViewerState();
 }
 
-class _CarViewerState extends State<CarViewer> {
+class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
   late Future<CarModel> _model = CarModel.load();
   final _focus = FocusNode();
   final _gltfController = GltfCarController();
   double _yaw = -.65, _pitch = .55, _zoom = 1, _startZoom = 1;
   String _selected = 'front_wing', _team = 'neutral', _archive = 'generic';
   bool _labels = true, _wire = false;
+  bool _focusMode = false, _exploded = false, _technical = false;
   bool _gltfReady = false, _gltfUnavailable = false;
+  late final AnimationController _focusAnimation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 180),
+  )..addListener(_repaint);
+  late final AnimationController _explodeAnimation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+  )..addListener(_repaint);
+
+  void _repaint() => setState(() {});
+
+  @override
+  void didUpdateWidget(covariant CarViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final component = widget.highlightedComponentId;
+    if (component != null &&
+        component != oldWidget.highlightedComponentId &&
+        carComponentIds.contains(component)) {
+      _selected = component;
+      _focusMode = true;
+      _focusAnimation.forward();
+    }
+    if (widget.highlightedTeamId != oldWidget.highlightedTeamId) {
+      _team = carTeamKey(widget.highlightedTeamId);
+      _archive = 'generic';
+    }
+  }
 
   @override
   void dispose() {
+    _focusAnimation.dispose();
+    _explodeAnimation.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -42,6 +78,26 @@ class _CarViewerState extends State<CarViewer> {
     _pitch = pitch;
     _zoom = 1;
   });
+
+  void _toggleFocus() {
+    setState(() => _focusMode = !_focusMode);
+    _animate(_focusAnimation, _focusMode);
+  }
+
+  void _toggleExploded() {
+    setState(() => _exploded = !_exploded);
+    _animate(_explodeAnimation, _exploded);
+  }
+
+  void _animate(AnimationController controller, bool forward) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      controller.value = forward ? 1 : 0;
+    } else if (forward) {
+      controller.forward();
+    } else {
+      controller.reverse();
+    }
+  }
 
   Future<void> _official(String value) async {
     final uri = Uri.tryParse(value);
@@ -185,6 +241,9 @@ class _CarViewerState extends State<CarViewer> {
                 chinese: zh,
                 textScaler: MediaQuery.textScalerOf(context),
                 renderModel: !_gltfReady || _wire,
+                focus: _focusAnimation.value,
+                exploded: _explodeAnimation.value,
+                technical: _technical,
               );
               return Semantics(
                 label: tr(context, 'Interactive car model'),
@@ -274,6 +333,9 @@ class _CarViewerState extends State<CarViewer> {
                                   zoom: _zoom,
                                   selected: _selected,
                                   team: _team,
+                                  focus: _focusAnimation.value,
+                                  exploded: _explodeAnimation.value,
+                                  technical: _technical,
                                   onReady: () {
                                     if (mounted && !_gltfReady) {
                                       setState(() => _gltfReady = true);
@@ -305,6 +367,39 @@ class _CarViewerState extends State<CarViewer> {
           Text(
             tr(context, 'Drag to rotate · Pinch to zoom'),
             style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilterChip(
+                key: const ValueKey('focus-mode'),
+                avatar: const Icon(Icons.center_focus_strong, size: 18),
+                label: Text(tr(context, 'Focus component')),
+                selected: _focusMode,
+                onSelected: (_) => _toggleFocus(),
+              ),
+              FilterChip(
+                key: const ValueKey('exploded-mode'),
+                avatar: Icon(
+                  _exploded ? Icons.compress : Icons.open_in_full,
+                  size: 18,
+                ),
+                label: Text(
+                  tr(context, _exploded ? 'Assemble' : 'Deconstruct'),
+                ),
+                selected: _exploded,
+                onSelected: (_) => _toggleExploded(),
+              ),
+              FilterChip(
+                key: const ValueKey('technical-mode'),
+                avatar: const Icon(Icons.architecture, size: 18),
+                label: Text(tr(context, _technical ? 'Technical' : 'Livery')),
+                selected: _technical,
+                onSelected: (value) => setState(() => _technical = value),
+              ),
+            ],
           ),
           Wrap(
             spacing: 4,
@@ -426,6 +521,8 @@ class CarPainter extends CustomPainter {
   final String selected, team;
   final bool labels, wire, chinese;
   final bool renderModel;
+  final bool technical;
+  final double focus, exploded;
   final ColorScheme scheme;
   final TextScaler textScaler;
   Size? _cachedSize;
@@ -442,11 +539,18 @@ class CarPainter extends CustomPainter {
     required this.chinese,
     required this.scheme,
     required this.textScaler,
+    required this.focus,
+    required this.exploded,
+    required this.technical,
     this.renderModel = true,
   });
 
-  (Offset, double) _project(CarPoint p, Size size) {
-    final x = p.$1, y = p.$2 - .45, z = p.$3;
+  (Offset, double) _project(CarPoint p, Size size, [String? part]) {
+    final offset = part == null ? (0.0, 0.0, 0.0) : carPartOffset(part);
+    final amount = exploded + (part == selected ? focus * .18 : 0);
+    final x = p.$1 + offset.$1 * amount,
+        y = p.$2 - .45 + offset.$2 * amount,
+        z = p.$3 + offset.$3 * amount;
     final rx = x * math.cos(yaw) + z * math.sin(yaw),
         rz = z * math.cos(yaw) - x * math.sin(yaw);
     final ry = y * math.cos(pitch) - rz * math.sin(pitch),
@@ -470,7 +574,7 @@ class CarPainter extends CustomPainter {
   }
 
   _Face _makeFace(String id, CarFace face, Size size) {
-    final points = face.points.map((p) => _project(p, size)).toList();
+    final points = face.points.map((p) => _project(p, size, id)).toList();
     return _Face(
       id,
       Path()..addPolygon(points.map((p) => p.$1).toList(), true),
@@ -498,7 +602,10 @@ class CarPainter extends CustomPainter {
             : switch (f.source.material) {
                 'tyre' => const Color(0xff303338),
                 'hub' => const Color(0xff707980),
-                _ => model.materials[team]![f.source.material]!,
+                _ =>
+                  model.materials[technical
+                      ? 'neutral'
+                      : team]![f.source.material]!,
               };
         var color = Color.from(
           alpha: 1,
@@ -507,6 +614,9 @@ class CarPainter extends CustomPainter {
           blue: base.b * f.source.light,
         );
         if (!active) color = Color.lerp(color, scheme.surface, .18)!;
+        if (!active && focus > 0) {
+          color = Color.lerp(color, scheme.surface, focus * .7)!;
+        }
         if (!wire) canvas.drawPath(f.path, Paint()..color = color);
         canvas.drawPath(
           f.path,
@@ -538,7 +648,7 @@ class CarPainter extends CustomPainter {
     final anchors = <({CarComponent component, Offset point})>[];
     for (final id in ids) {
       final c = model.components.firstWhere((c) => c.id == id),
-          p = _project(c.anchor, size).$1;
+          p = _project(c.anchor, size, id).$1;
       if (p.dx > 8 &&
           p.dx < size.width - 8 &&
           p.dy > 40 &&
@@ -605,6 +715,9 @@ class CarPainter extends CustomPainter {
       labels != old.labels ||
       wire != old.wire ||
       renderModel != old.renderModel ||
+      focus != old.focus ||
+      exploded != old.exploded ||
+      technical != old.technical ||
       chinese != old.chinese ||
       scheme != old.scheme ||
       textScaler != old.textScaler;

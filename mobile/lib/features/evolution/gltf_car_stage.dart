@@ -53,6 +53,9 @@ class GltfCarStage extends StatefulWidget {
     required this.zoom,
     required this.selected,
     required this.team,
+    required this.focus,
+    required this.exploded,
+    required this.technical,
     required this.onReady,
     required this.onUnavailable,
   });
@@ -61,6 +64,8 @@ class GltfCarStage extends StatefulWidget {
   final GltfCarController controller;
   final double yaw, pitch, zoom;
   final String selected, team;
+  final double focus, exploded;
+  final bool technical;
   final VoidCallback onReady, onUnavailable;
 
   @override
@@ -71,6 +76,8 @@ class _GltfCarStageState extends State<GltfCarStage> {
   static const _asset = 'assets/evolution/universal-car.glb';
   final _resources = ResourceGroup();
   final _parts = <String, Node>{};
+  final _materials =
+      <({String part, String key, PhysicallyBasedMaterial value})>[];
   Scene? _scene;
   Node? _car;
   bool _ready = false, _failed = false;
@@ -122,6 +129,7 @@ class _GltfCarStageState extends State<GltfCarStage> {
           '${widget.model.components.length}',
         );
       }
+      _prepareMaterials();
       _applyAppearance();
       final camera = _camera;
       widget.controller._attach(scene, camera, _parts.keys);
@@ -144,7 +152,10 @@ class _GltfCarStageState extends State<GltfCarStage> {
     if (!_ready) return;
     widget.controller._updateCamera(_camera);
     if (oldWidget.selected != widget.selected ||
-        oldWidget.team != widget.team) {
+        oldWidget.team != widget.team ||
+        oldWidget.focus != widget.focus ||
+        oldWidget.exploded != widget.exploded ||
+        oldWidget.technical != widget.technical) {
       _applyAppearance();
     }
   }
@@ -155,14 +166,7 @@ class _GltfCarStageState extends State<GltfCarStage> {
     if (_ready) _applyAppearance();
   }
 
-  void _applyAppearance() {
-    final selectedColor = Theme.of(context).colorScheme.primary;
-    for (final entry in _parts.entries) {
-      entry.value.highlightColor = entry.key == widget.selected
-          ? vm.Vector4(selectedColor.r, selectedColor.g, selectedColor.b, 1)
-          : null;
-    }
-
+  void _prepareMaterials() {
     const materialOrder = [
       'body',
       'secondary',
@@ -171,28 +175,59 @@ class _GltfCarStageState extends State<GltfCarStage> {
       'tyre',
       'hub',
     ];
-    final palette = widget.model.materials[widget.team]!;
     for (final component in widget.model.components) {
-      final node = _parts[component.id], mesh = _parts[component.id]?.mesh;
-      if (node == null || mesh == null) continue;
+      final mesh = _parts[component.id]?.mesh;
+      if (mesh == null) continue;
       final used = materialOrder
           .where((name) => component.faces.any((face) => face.material == name))
           .toList();
       for (var i = 0; i < mesh.primitives.length && i < used.length; i++) {
-        final key = used[i];
-        final color = switch (key) {
-          'tyre' => const Color(0xff303338),
-          'hub' => const Color(0xff707980),
-          _ => palette[key]!,
-        };
-        final material = mesh.primitives[i].material;
-        if (material is PhysicallyBasedMaterial) {
-          material
-            ..baseColorFactor = vm.Vector4(color.r, color.g, color.b, 1)
-            ..metallicFactor = 0
-            ..roughnessFactor = .8;
-        }
+        final material = PhysicallyBasedMaterial()..doubleSided = true;
+        mesh.primitives[i].material = material;
+        _materials.add((part: component.id, key: used[i], value: material));
       }
+    }
+  }
+
+  void _applyAppearance() {
+    final selectedColor = Theme.of(context).colorScheme.primary;
+    for (final entry in _parts.entries) {
+      final offset = carPartOffset(entry.key);
+      final amount =
+          widget.exploded +
+          (entry.key == widget.selected ? widget.focus * .18 : 0);
+      entry.value
+        ..position = vm.Vector3(
+          offset.$1 * amount,
+          offset.$2 * amount,
+          offset.$3 * amount,
+        )
+        ..scale = vm.Vector3.all(
+          1 + (entry.key == widget.selected ? widget.focus * .035 : 0),
+        );
+      entry.value.highlightColor = entry.key == widget.selected
+          ? vm.Vector4(selectedColor.r, selectedColor.g, selectedColor.b, 1)
+          : null;
+    }
+
+    final palette =
+        widget.model.materials[widget.technical ? 'neutral' : widget.team]!;
+    for (final entry in _materials) {
+      var color = switch (entry.key) {
+        'tyre' => const Color(0xff303338),
+        'hub' => const Color(0xff707980),
+        _ => palette[entry.key]!,
+      };
+      final active = entry.part == widget.selected;
+      if (!active && widget.focus > 0) {
+        color = Color.lerp(color, const Color(0xff8b9297), widget.focus * .72)!;
+      }
+      final alpha = active ? 1.0 : 1 - widget.focus * .72;
+      entry.value
+        ..baseColorFactor = vm.Vector4(color.r, color.g, color.b, alpha)
+        ..alphaMode = alpha < 1 ? AlphaMode.blend : AlphaMode.opaque
+        ..metallicFactor = widget.technical ? .18 : 0
+        ..roughnessFactor = widget.technical ? .62 : .8;
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:grand_prix_reminder/data/race_repository.dart';
+import 'package:grand_prix_reminder/features/evolution/car_viewer.dart';
 import 'package:grand_prix_reminder/features/evolution/evolution_page.dart';
 
 void main() {
@@ -24,12 +25,14 @@ void main() {
                 'id': 'u',
                 'team_id': 't',
                 'team': 'Test Team',
+                'component_id': 'floor',
                 'component': 'Floor',
                 'title': 'Revised floor',
                 'status': 'tested',
                 'confidence': 'high',
                 'race_id': '2026-1',
                 'race': 'Test Grand Prix',
+                'round': 1,
                 'change': 'New edge',
                 'goal': null,
                 'expected_effect': null,
@@ -39,6 +42,20 @@ void main() {
                     'url': 'https://example.com/test',
                   },
                 ],
+              },
+            ],
+            'timeline': [
+              {
+                'race_id': '2026-1',
+                'race': 'Test Grand Prix',
+                'round': 1,
+                'upgrade_ids': ['u'],
+              },
+              {
+                'race_id': '2026-2',
+                'race': 'Next Grand Prix',
+                'round': 2,
+                'upgrade_ids': <String>[],
               },
             ],
             'stale': true,
@@ -83,6 +100,14 @@ void main() {
       find.text('Showing saved upgrades. They may have changed.'),
       findsOneWidget,
     );
+    final event = find.byKey(const ValueKey('evolution-2026-1'));
+    await tester.ensureVisible(event);
+    await tester.tap(event);
+    await tester.pumpAndSettle();
+    final car = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('car-canvas')),
+    );
+    expect((car.painter! as CarPainter).selected, 'floor');
     await tester.ensureVisible(find.byType(ExpansionTile));
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();

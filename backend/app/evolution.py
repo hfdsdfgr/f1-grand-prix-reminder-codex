@@ -32,9 +32,17 @@ class UpgradeRead(BaseModel):
     sources: list[UpgradeSource]
 
 
+class EvolutionTimelineEvent(BaseModel):
+    race_id: str
+    race: str
+    round: int
+    upgrade_ids: list[str]
+
+
 class EvolutionFeed(BaseModel):
     season: int
     upgrades: list[UpgradeRead]
+    timeline: list[EvolutionTimelineEvent]
     updated_at: datetime
     stale: bool = False
 
@@ -55,6 +63,9 @@ def load_evolution(path: str, season: int) -> EvolutionFeed:
             JOIN team_seasons ts ON ts.team_season_id=u.team_season_id
             JOIN seasons s ON s.season_id=ts.season_id WHERE s.year=?
             ORDER BY us.source_id''', (season,)).fetchall()
+        race_rows = db.execute('''SELECT r.display_name AS race,r.round
+            FROM races r JOIN seasons s ON s.season_id=r.season_id
+            WHERE s.year=? AND r.round IS NOT NULL ORDER BY r.round''', (season,)).fetchall()
     sources = {}
     for row in source_rows:
         if not row['original_text'].strip():
@@ -73,4 +84,13 @@ def load_evolution(path: str, season: int) -> EvolutionFeed:
         goal=row['technical_goal'], expected_effect=row['expected_effect'],
         status=row['status'], confidence=row['confidence'], sources=sources[row['upgrade_id']],
     ) for row in rows if row['upgrade_id'] in sources]
-    return EvolutionFeed(season=season, upgrades=upgrades, updated_at=datetime.now(timezone.utc))
+    upgrade_ids = {}
+    for upgrade in upgrades:
+        if upgrade.race_id is not None:
+            upgrade_ids.setdefault(upgrade.race_id, []).append(upgrade.id)
+    timeline = [EvolutionTimelineEvent(
+        race_id=f"{season}-{row['round']}", race=row['race'], round=row['round'],
+        upgrade_ids=upgrade_ids.get(f"{season}-{row['round']}", []),
+    ) for row in race_rows]
+    return EvolutionFeed(season=season, upgrades=upgrades, timeline=timeline,
+                         updated_at=datetime.now(timezone.utc))

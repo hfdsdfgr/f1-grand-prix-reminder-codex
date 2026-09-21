@@ -20,11 +20,23 @@ class EvolutionPage extends StatefulWidget {
 class _EvolutionPageState extends State<EvolutionPage> {
   int _season = DateTime.now().year;
   String? _team, _race;
+  String? _selectedUpgrade, _highlightedComponent, _highlightedTeam;
   late Future<EvolutionFeed> _request = widget.repository.evolution(_season);
 
   void _load() => setState(() {
     _request = widget.repository.evolution(_season);
   });
+
+  void _selectUpgrade(UpgradeEntry entry) => setState(() {
+    _selectedUpgrade = entry.id;
+    _highlightedComponent = entry.componentId;
+    _highlightedTeam = entry.teamId;
+  });
+
+  void _clearSelection() {
+    _selectedUpgrade = null;
+    _highlightedComponent = null;
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -37,7 +49,11 @@ class _EvolutionPageState extends State<EvolutionPage> {
       const SizedBox(height: 12),
       Text(tr(context, 'Follow what changes on the cars.')),
       const SizedBox(height: 24),
-      CarViewer(enableGltf: widget.enableGltf),
+      CarViewer(
+        enableGltf: widget.enableGltf,
+        highlightedComponentId: _highlightedComponent,
+        highlightedTeamId: _highlightedTeam,
+      ),
       const SizedBox(height: 32),
       Row(
         children: [
@@ -48,6 +64,8 @@ class _EvolutionPageState extends State<EvolutionPage> {
                     _season--;
                     _team = null;
                     _race = null;
+                    _highlightedTeam = null;
+                    _clearSelection();
                     _load();
                   }
                 : null,
@@ -66,6 +84,8 @@ class _EvolutionPageState extends State<EvolutionPage> {
                     _season++;
                     _team = null;
                     _race = null;
+                    _highlightedTeam = null;
+                    _clearSelection();
                     _load();
                   }
                 : null,
@@ -103,10 +123,14 @@ class _EvolutionPageState extends State<EvolutionPage> {
             for (final u in teamEntries)
               if (u.raceId != null) u.raceId!: u.race!,
           };
-          final race = races.containsKey(_race) ? _race : null;
-          final entries = teamEntries.where(
-            (u) => race == null || u.raceId == race,
-          );
+          final validRaceIds = {
+            ...races.keys,
+            ...feed.timeline.map((event) => event.raceId),
+          };
+          final race = validRaceIds.contains(_race) ? _race : null;
+          final entries = teamEntries
+              .where((u) => race == null || u.raceId == race)
+              .toList();
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -138,37 +162,97 @@ class _EvolutionPageState extends State<EvolutionPage> {
                   onChanged: (value) => setState(() {
                     _team = value;
                     _race = null;
+                    _highlightedTeam = value;
+                    _clearSelection();
                   }),
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  key: ValueKey('race-$_season-$team-$race'),
-                  initialValue: race,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: tr(context, 'Grand Prix'),
-                  ),
-                  items: [
-                    DropdownMenuItem(
-                      value: null,
-                      child: Text(tr(context, 'All races')),
-                    ),
-                    for (final r in races.entries)
-                      DropdownMenuItem(
-                        value: r.key,
-                        child: Text(tr(context, r.value)),
-                      ),
-                  ],
-                  onChanged: (value) => setState(() => _race = value),
-                ),
-                const SizedBox(height: 32),
+              ],
+              if (feed.timeline.isNotEmpty || feed.upgrades.isNotEmpty) ...[
                 Text(
-                  tr(context, 'Upgrade timeline'),
+                  tr(context, 'Season Evolution'),
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 16),
+                if (feed.timeline.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: Text(tr(context, 'All races')),
+                        selected: race == null,
+                        onSelected: (_) => setState(() {
+                          _race = null;
+                          _clearSelection();
+                        }),
+                      ),
+                      for (final event in feed.timeline)
+                        Builder(
+                          builder: (context) {
+                            final upgrades = teamEntries
+                                .where((u) => u.raceId == event.raceId)
+                                .toList();
+                            final hasUpgrade = upgrades.isNotEmpty;
+                            return Semantics(
+                              label:
+                                  '${event.race}. ${tr(context, hasUpgrade ? 'Upgrade' : 'No recorded upgrade')}',
+                              selected: race == event.raceId,
+                              child: ChoiceChip(
+                                key: ValueKey('evolution-${event.raceId}'),
+                                avatar: Icon(
+                                  hasUpgrade
+                                      ? Icons.circle
+                                      : Icons.circle_outlined,
+                                  size: 10,
+                                ),
+                                label: Text(
+                                  '${event.round} ${tr(context, event.race)}',
+                                ),
+                                selected: race == event.raceId,
+                                onSelected: (_) {
+                                  setState(() => _race = event.raceId);
+                                  if (hasUpgrade) {
+                                    _selectUpgrade(upgrades.first);
+                                  } else {
+                                    setState(_clearSelection);
+                                  }
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('race-$_season-$team-$race'),
+                    initialValue: race,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: tr(context, 'Grand Prix'),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: null,
+                        child: Text(tr(context, 'All races')),
+                      ),
+                      for (final r in races.entries)
+                        DropdownMenuItem(
+                          value: r.key,
+                          child: Text(tr(context, r.value)),
+                        ),
+                    ],
+                    onChanged: (value) => setState(() => _race = value),
+                  ),
+                const SizedBox(height: 24),
                 for (final entry in entries)
-                  _UpgradeDetails(key: ValueKey(entry.id), entry: entry),
+                  _UpgradeDetails(
+                    key: ValueKey(entry.id),
+                    entry: entry,
+                    selected: entry.id == _selectedUpgrade,
+                    onSelected: () => _selectUpgrade(entry),
+                  ),
               ],
               TextButton.icon(
                 onPressed: _load,
@@ -185,10 +269,25 @@ class _EvolutionPageState extends State<EvolutionPage> {
 
 class _UpgradeDetails extends StatelessWidget {
   final UpgradeEntry entry;
-  const _UpgradeDetails({super.key, required this.entry});
+  final bool selected;
+  final VoidCallback onSelected;
+  const _UpgradeDetails({
+    super.key,
+    required this.entry,
+    required this.selected,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) => ExpansionTile(
+    onExpansionChanged: (expanded) {
+      if (expanded) onSelected();
+    },
+    leading: Icon(
+      selected ? Icons.adjust : Icons.circle_outlined,
+      color: selected ? Theme.of(context).colorScheme.primary : null,
+      size: 18,
+    ),
     tilePadding: EdgeInsets.zero,
     childrenPadding: const EdgeInsets.only(bottom: 24),
     title: Text('${entry.team} · ${tr(context, entry.component)}'),
