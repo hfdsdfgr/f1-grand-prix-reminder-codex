@@ -50,10 +50,13 @@ class ResultsTests(unittest.TestCase):
                     'gen_1', 'test', 'test', 'v1', 'v1', '2026-03-01T13:00:00+00:00',
                     'snap_1', 'stored',
                 ))
-                db.execute('''INSERT INTO race_briefs VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (
-                    'brief_1', race_id, 'High-speed balance improved.', None, None,
-                    None, None, None, None, 'stored', 'gen_1',
-                ))
+                db.execute('''INSERT INTO race_briefs
+                    (race_brief_id,race_id,technical_themes,team_performance,tyre_issues,
+                     strategy_issues,upgrade_feedback,driver_concerns,next_race_expectations,
+                     status,generation_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (
+                        'brief_1', race_id, 'High-speed balance improved.', None, None,
+                        None, None, None, None, 'stored', 'gen_1',
+                    ))
             briefing = repo.briefing(2026, 1)
             self.assertEqual(briefing.insights[0].topic, 'Technical themes')
             self.assertEqual(str(briefing.sources[0].url), 'https://example.com/interview')

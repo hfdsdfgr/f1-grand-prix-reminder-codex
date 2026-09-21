@@ -422,8 +422,16 @@ CREATE TABLE IF NOT EXISTS race_briefs (
     race_brief_id TEXT PRIMARY KEY, race_id TEXT NOT NULL REFERENCES races(race_id),
     technical_themes TEXT, team_performance TEXT, tyre_issues TEXT, strategy_issues TEXT,
     upgrade_feedback TEXT, driver_concerns TEXT, next_race_expectations TEXT,
+    race_assessment TEXT, car_strengths TEXT, car_weaknesses TEXT, technical_issues TEXT,
+    incidents TEXT, key_quotes TEXT,
     status TEXT NOT NULL, generation_id TEXT NOT NULL REFERENCES ai_generations(generation_id),
     UNIQUE(race_id, generation_id)
+);
+CREATE TABLE IF NOT EXISTS briefing_evidence (
+    race_brief_id TEXT NOT NULL REFERENCES race_briefs(race_brief_id) ON DELETE CASCADE,
+    field TEXT NOT NULL, interview_id TEXT NOT NULL REFERENCES interviews(interview_id),
+    quote TEXT NOT NULL,
+    PRIMARY KEY(race_brief_id, field, interview_id, quote)
 );
 CREATE TABLE IF NOT EXISTS review_items (
     review_id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT,
@@ -465,6 +473,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_review_pending_entity
     ON review_items(entity_type, entity_id) WHERE entity_id IS NOT NULL AND status='pending_review';
 CREATE INDEX IF NOT EXISTS idx_post_race_jobs_due
     ON post_race_jobs(status,next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_briefing_evidence_brief ON briefing_evidence(race_brief_id,field);
 '''
 
 
@@ -658,6 +667,10 @@ def migrate(path: str) -> None:
         _add_missing_columns(db, 'upgrades', {
             'review_status': "TEXT NOT NULL DEFAULT 'published'", 'event_fingerprint': 'TEXT',
         })
+        _add_missing_columns(db, 'race_briefs', {
+            'race_assessment': 'TEXT', 'car_strengths': 'TEXT', 'car_weaknesses': 'TEXT',
+            'technical_issues': 'TEXT', 'incidents': 'TEXT', 'key_quotes': 'TEXT',
+        })
         _migrate_evolution_identity(db, now)
         db.execute('''INSERT OR IGNORE INTO providers
             (provider_id,name,type,base_url,priority,status,created_at,updated_at)
@@ -679,6 +692,7 @@ def migrate(path: str) -> None:
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (10, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (11, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (12, ?)', (now,))
+        db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (13, ?)', (now,))
         db.execute('PRAGMA foreign_keys = ON')
 
 

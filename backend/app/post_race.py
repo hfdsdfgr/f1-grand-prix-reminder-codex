@@ -11,7 +11,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
 from app.data_schema import connect, migrate
-from app.evolution_worker.worker import execute_evolution
+from app.briefing_worker import execute_briefing
+from app.evolution_worker.worker import execute_discovered_evolution
 
 
 logger = logging.getLogger('post_race')
@@ -49,7 +50,7 @@ class PostRaceOrchestrator:
                  running_timeout: timedelta = timedelta(minutes=30)):
         self.path = path
         migrate(path)
-        self.runners = runners or {'evolution': self._run_evolution}
+        self.runners = runners or {'evolution': self._run_evolution, 'briefing': self._run_briefing}
         self.retry_delays = retry_delays
         self.max_attempts = len(retry_delays) + 1
         self.catchup_window = catchup_window
@@ -156,16 +157,10 @@ class PostRaceOrchestrator:
             db.close()
 
     async def _run_evolution(self, public_race_id: str, stage: str) -> dict:
-        with closing(connect(self.path)) as db:
-            urls = [row[0] for row in db.execute('''SELECT DISTINCT d.canonical_url
-                FROM evolution_source_documents d
-                JOIN evolution_source_revisions r ON r.source_id=d.source_id
-                JOIN race_external_identities rei ON rei.race_id=r.race_id
-                WHERE rei.provider_id='prv_jolpica' AND rei.external_id=?''',
-                                                  (public_race_id,)).fetchall()]
-        if not urls:
-            raise RuntimeError('No registered Evolution sources for this race')
-        return await execute_evolution(self.path, public_race_id, urls)
+        return await execute_discovered_evolution(self.path, public_race_id)
+
+    async def _run_briefing(self, public_race_id: str, stage: str) -> dict:
+        return await execute_briefing(self.path, public_race_id)
 
     async def _execute(self, job, now: datetime) -> None:
         job_id, public_id, worker_type, stage = job

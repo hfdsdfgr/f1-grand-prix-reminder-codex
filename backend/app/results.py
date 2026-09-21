@@ -134,15 +134,16 @@ class ChampionshipImpact(BaseModel):
     stale: bool = False
 
 
-class BriefingInsight(BaseModel):
-    topic: str
-    detail: str
-
-
 class BriefingSource(BaseModel):
     provider: str | None = None
     url: HttpUrl
     published_at: datetime | None = None
+
+
+class BriefingInsight(BaseModel):
+    topic: str
+    detail: str
+    sources: list[BriefingSource] = Field(default_factory=list)
 
 
 class RaceBriefing(BaseModel):
@@ -756,9 +757,10 @@ class ResultsRepository:
                     updated_at=datetime.now(timezone.utc),
                 )
             race_id = race[0]
-            brief = db.execute('''SELECT b.technical_themes,b.team_performance,b.tyre_issues,
+            brief = db.execute('''SELECT b.race_brief_id,b.technical_themes,b.team_performance,b.tyre_issues,
                 b.strategy_issues,b.upgrade_feedback,b.driver_concerns,b.next_race_expectations,
-                g.source_snapshot_id,g.generated_at
+                g.source_snapshot_id,g.generated_at,b.race_assessment,b.car_strengths,b.car_weaknesses,
+                b.technical_issues,b.incidents,b.key_quotes
                 FROM race_briefs b JOIN ai_generations g ON g.generation_id=b.generation_id
                 WHERE b.race_id=? ORDER BY g.generated_at DESC, b.rowid DESC LIMIT 1''',
                 (race_id,)).fetchone()
@@ -770,7 +772,10 @@ class ResultsRepository:
                 FROM interview_sources s JOIN interviews i ON i.interview_id=s.interview_id
                 JOIN source_snapshot_items item ON item.entity_id=i.interview_id
                 WHERE item.snapshot_id=? AND item.entity_type='interview' ''',
-                (brief[7], brief[7])))
+                (brief[8], brief[8])))
+            evidence_rows = [] if not brief else list(db.execute('''SELECT e.field,i.source_provider,
+                i.source_url,i.published_at FROM briefing_evidence e JOIN interviews i USING(interview_id)
+                WHERE e.race_brief_id=?''', (brief[0],)))
         sources, seen = [], set()
         updated_at = None
         for provider, url, published_at, retrieved_at in source_rows:
@@ -784,13 +789,23 @@ class ResultsRepository:
                     updated_at = max(updated_at, retrieved) if updated_at else retrieved
                 except ValueError:
                     pass
+        by_field: dict[str, list[BriefingSource]] = {}
+        for field, provider, url, published_at in evidence_rows:
+            if isinstance(url, str) and url.startswith(('https://', 'http://')):
+                by_field.setdefault(field, []).append(BriefingSource(
+                    provider=provider, url=url, published_at=published_at))
         fields = (
-            ('Technical themes', 0), ('Team performance', 1), ('Tyre issues', 2),
-            ('Strategy issues', 3), ('Upgrade feedback', 4), ('Driver concerns', 5),
-            ('Next-race expectations', 6),
+            ('Technical themes', 1, 'technical_themes'), ('Team performance', 2, 'team_performance'),
+            ('Tyre issues', 3, 'tyres'), ('Strategy issues', 4, 'strategy'),
+            ('Upgrade feedback', 5, 'upgrade_feedback'), ('Driver concerns', 6, 'driver_concerns'),
+            ('Next-race expectations', 7, 'future_expectations'), ('Race assessment', 10, 'race_assessment'),
+            ('Car strengths', 11, 'car_strengths'), ('Car weaknesses', 12, 'car_weaknesses'),
+            ('Technical issues', 13, 'technical_issues'), ('Incidents', 14, 'incidents'),
+            ('Key quotes', 15, 'key_quotes'),
         )
-        insights = [BriefingInsight(topic=topic, detail=brief[index]) for topic, index in fields
-                    if brief and brief[index] and sources]
+        insights = [BriefingInsight(topic=topic, detail=brief[index],
+                                    sources=by_field.get(field, sources))
+                    for topic, index, field in fields if brief and brief[index] and (by_field.get(field) or sources)]
         return RaceBriefing(
             race_id=f'{season}-{round_number}', insights=insights, sources=sources,
             updated_at=updated_at or datetime.now(timezone.utc),

@@ -273,3 +273,113 @@ class TeamWebsiteProvider(TrustedUrlProvider):
         result = await super().collect(race_id, urls)
         result.documents = [item.model_copy(update={'team_ids': [self.team_id]}) for item in result.documents]
         return result
+
+
+class _LinkCollector(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.links: list[tuple[str, str]] = []
+        self.href: str | None = None
+        self.text: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'a':
+            self.href = dict(attrs).get('href')
+            self.text = []
+
+    def handle_data(self, data):
+        if self.href:
+            self.text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == 'a' and self.href:
+            self.links.append((self.href, ' '.join(self.text)))
+            self.href = None
+
+
+class OfficialSourceDiscovery:
+    """Find candidate pages only on Formula 1 and team-owned sites."""
+    max_candidates = 24
+
+    def __init__(self, client: httpx.AsyncClient | None = None, resolver=socket.getaddrinfo):
+        self.client = client
+        self.resolver = resolver
+
+    @staticmethod
+    def _keywords(race_name: str, circuit: str | None, country: str | None,
+                  city: str | None) -> set[str]:
+        values = (race_name, circuit or '', country or '', city or '')
+        return {word for value in values for word in re.findall(r'[a-z0-9]{4,}', value.casefold())
+                if word not in {'grand', 'prix', 'race', 'formula'}}
+
+    @staticmethod
+    def _is_relevant(document: SourceDocument, race_name: str, keywords: set[str]) -> bool:
+        text = f'{document.title}\n{document.cleaned_text}'.casefold()
+        name = ' '.join(race_name.casefold().split())
+        return name in text or sum(word in text for word in keywords) >= 2
+
+    async def _page_links(self, url: str, client: httpx.AsyncClient) -> list[tuple[str, str]]:
+        current, _, source_type = validate_public_url(url, self.resolver)
+        if source_type not in {'formula1_official', 'team_official'}:
+            return []
+        response = await client.get(current, headers={'User-Agent': USER_AGENT}, follow_redirects=True)
+        response.raise_for_status()
+        if len(response.content) > MAX_BODY_BYTES:
+            return []
+        parser = _LinkCollector()
+        parser.feed(response.text)
+        return [(urljoin(str(response.url), href), text) for href, text in parser.links]
+
+    async def _sitemaps(self, host: str, client: httpx.AsyncClient) -> list[str]:
+        """Read a small official sitemap index; it is discovery metadata, never evidence."""
+        try:
+            robots, _, _ = validate_public_url(f'https://{host}/robots.txt', self.resolver)
+            response = await client.get(robots, headers={'User-Agent': USER_AGENT}, follow_redirects=True)
+            response.raise_for_status()
+            return re.findall(r'(?im)^sitemap:\s*(https?://\S+)', response.text)[:3]
+        except (httpx.HTTPError, ValueError):
+            return []
+
+    async def discover(self, *, race_id: str, race_name: str, circuit: str | None = None,
+                       country: str | None = None, city: str | None = None) -> list[str]:
+        keywords = self._keywords(race_name, circuit, country, city)
+        if not keywords:
+            return []
+        hosts = ('www.formula1.com', *(host for host, (_, kind) in TRUSTED_HOSTS.items()
+                                      if kind == 'team_official'))
+        seeds = ['https://www.formula1.com/en/latest/all.html'] + [f'https://{host}/' for host in hosts[1:]]
+        owns_client = self.client is None
+        client = self.client or httpx.AsyncClient(timeout=httpx.Timeout(20, connect=8))
+        candidates: list[str] = []
+        try:
+            for seed in seeds:
+                try:
+                    links = await self._page_links(seed, client)
+                except (httpx.HTTPError, ValueError):
+                    links = []
+                for url, label in links:
+                    haystack = f'{url} {label}'.casefold()
+                    if any(word in haystack for word in keywords):
+                        candidates.append(url)
+                host = urlsplit(seed).hostname
+                if host:
+                    for sitemap in await self._sitemaps(host, client):
+                        try:
+                            sitemap_url, _, source_type = validate_public_url(sitemap, self.resolver)
+                            if source_type not in {'formula1_official', 'team_official'}:
+                                continue
+                            xml = await client.get(sitemap_url, headers={'User-Agent': USER_AGENT})
+                            xml.raise_for_status()
+                            if len(xml.content) > MAX_BODY_BYTES:
+                                continue
+                            candidates.extend(url for url in re.findall(r'<loc>([^<]+)</loc>', xml.text)
+                                              if any(word in url.casefold() for word in keywords))
+                        except (httpx.HTTPError, ValueError):
+                            continue
+            selected = list(dict.fromkeys(candidates))[:self.max_candidates]
+            documents = await TrustedUrlProvider(client, self.resolver).collect(race_id, selected)
+            return [str(item.url) for item in documents.documents
+                    if self._is_relevant(item, race_name, keywords)]
+        finally:
+            if owns_client:
+                await client.aclose()

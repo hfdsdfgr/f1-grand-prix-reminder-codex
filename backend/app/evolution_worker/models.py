@@ -125,3 +125,26 @@ class ValidatedBatch(BaseModel):
     results: list[EvolutionExtraction]
     issues: list[str]
     review_status: str = 'pending_review'
+
+
+class BriefingEvidence(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    source_id: str
+    quote: str = Field(min_length=1, max_length=800)
+
+
+class BriefingFact(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    field: Literal['race_assessment', 'car_strengths', 'car_weaknesses', 'strategy', 'tyres',
+                   'technical_issues', 'upgrade_feedback', 'incidents', 'future_expectations',
+                   'key_quotes']
+    value: str = Field(min_length=1, max_length=2000)
+    evidence: list[BriefingEvidence] = Field(min_length=1)
+
+
+class BriefingBatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    facts: list[BriefingFact]

@@ -8,7 +8,7 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 
 from app.evolution_worker.llm import DeepSeekProvider, LLMProvider, PIPELINE_VERSION, PROMPT_VERSION
-from app.evolution_worker.sources import EvolutionSourceProvider, TrustedUrlProvider
+from app.evolution_worker.sources import EvolutionSourceProvider, OfficialSourceDiscovery, TrustedUrlProvider
 from app.evolution_worker.sources import publication_phase
 from app.evolution_worker.validator import validate_batch
 from app.evolution_worker.persistence import persist_validated
@@ -47,6 +47,17 @@ def race_window(path: str, race_id: str) -> tuple[datetime | None, datetime | No
     start = datetime.fromisoformat(row[0].replace('Z', '+00:00'))
     end = datetime.fromisoformat(row[1].replace('Z', '+00:00')) if row[1] else start + timedelta(hours=4)
     return start, end
+
+
+def race_context(path: str, public_race_id: str) -> dict:
+    season, round_number = map(int, public_race_id.split('-'))
+    with closing(sqlite3.connect(path)) as db:
+        row = db.execute('''SELECT r.display_name,c.canonical_name,c.country,c.city
+            FROM races r JOIN seasons y ON y.season_id=r.season_id JOIN circuits c ON c.circuit_id=r.circuit_id
+            WHERE y.year=? AND r.round=?''', (season, round_number)).fetchone()
+    if row is None:
+        raise RuntimeError(f'Unknown race: {public_race_id}')
+    return dict(zip(('race_name', 'circuit', 'country', 'city'), row))
 
 
 async def run_worker(
@@ -112,6 +123,18 @@ async def execute_evolution(path: str, race_id: str, urls: list[str], *, dry_run
             model=output['model_name'], prompt_version=output['prompt_version'],
             pipeline_version=output['pipeline_version'],
         )
+    return output
+
+
+async def execute_discovered_evolution(path: str, race_id: str) -> dict:
+    """Production scheduler entry point; manual URL mode remains in execute_evolution."""
+    context = race_context(path, race_id)
+    urls = await OfficialSourceDiscovery().discover(race_id=race_id, **context)
+    if not urls:
+        return {'race_id': race_id, 'sources': [], 'provider_failures': [],
+                'discovery': {'urls': [], 'status': 'no_official_source'}}
+    output = await execute_evolution(path, race_id, urls)
+    output['discovery'] = {'urls': urls, 'status': 'found'}
     return output
 
 
