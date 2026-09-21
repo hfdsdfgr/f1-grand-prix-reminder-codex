@@ -15,7 +15,8 @@ import httpx
 from app.evolution_worker.llm import DeepSeekProvider
 from app.evolution_worker.models import ExtractionBatch, SourceDocument, UpgradeStatus
 from app.evolution_worker.sources import (
-    TrustedUrlProvider, canonical_url, clean_html, deduplicate, validate_public_url,
+    TrustedUrlProvider, canonical_url, clean_html, deduplicate, publication_phase,
+    published_at_from_html, validate_public_url,
 )
 from app.evolution_worker.validator import validate_batch
 from app.evolution_worker.persistence import persist_validated, review
@@ -67,6 +68,14 @@ def extraction(change='Revised floor geometry', quote='tested a revised floor ge
 
 
 class EvolutionSourceTests(unittest.IsolatedAsyncioTestCase):
+    def test_json_ld_publication_time_drives_post_race_phase(self):
+        published = published_at_from_html(
+            '<script type="application/ld+json">{"datePublished":"2026-09-13T17:00:00.000Z"}</script>')
+        self.assertEqual(published.isoformat(), '2026-09-13T17:00:00+00:00')
+        self.assertEqual(publication_phase(
+            published, datetime.fromisoformat('2026-09-13T13:00:00+00:00'),
+            datetime.fromisoformat('2026-09-13T15:00:00+00:00')), 'post_race')
+
     def test_cleaner_removes_scripts_and_deduplicates_text(self):
         title, text = clean_html('''<html><title>Tech</title><script>steal()</script>
             <article><h1>Floor</h1><p>A revised floor was tested in FP1.</p></article></html>''')

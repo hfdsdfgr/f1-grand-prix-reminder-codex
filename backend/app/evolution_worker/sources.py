@@ -102,7 +102,7 @@ def published_at_from_html(html: str) -> datetime | None:
     match = re.search(
         r'<meta[^>]+(?:property|name)=["\'](?:article:published_time|date|publishdate)["\'][^>]+content=["\']([^"\']+)',
         html, re.IGNORECASE,
-    )
+    ) or re.search(r'["\']datePublished["\']\s*:\s*["\']([^"\']+)', html, re.IGNORECASE)
     if not match:
         return None
     try:

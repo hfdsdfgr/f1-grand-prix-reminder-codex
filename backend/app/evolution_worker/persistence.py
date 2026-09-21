@@ -68,7 +68,9 @@ def _save_documents(db: sqlite3.Connection, documents: list[SourceDocument],
             f'{source_id}|{item.content_hash}'.encode()).hexdigest()[:24]
         db.execute('''INSERT INTO evolution_source_revisions
             (revision_id,source_id,race_id,publication_phase,published_at,fetched_at,cleaned_text,content_hash)
-            VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(source_id,content_hash) DO NOTHING''', (
+            VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(source_id,content_hash) DO UPDATE SET
+                publication_phase=excluded.publication_phase,
+                published_at=COALESCE(excluded.published_at,evolution_source_revisions.published_at)''', (
                 revision_id, source_id, internal_race_id, item.publication_phase,
                 item.published_at.isoformat() if item.published_at else None,
                 item.fetched_at.isoformat(), item.cleaned_text, item.content_hash,
