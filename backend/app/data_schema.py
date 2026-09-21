@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 
@@ -17,6 +18,17 @@ def new_id(prefix: str) -> str:
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _canonical_evolution_url(url: str) -> str:
+    parsed = urlsplit(url)
+    tracking = {'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref', 'source'}
+    query = urlencode([(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+                       if not key.casefold().startswith('utm_') and key.casefold() not in tracking])
+    path = parsed.path or '/'
+    if path != '/':
+        path = path.rstrip('/')
+    return urlunsplit((parsed.scheme.casefold(), parsed.netloc.casefold(), path, query, ''))
 
 
 def connect(path: str) -> sqlite3.Connection:
@@ -278,7 +290,9 @@ CREATE TABLE IF NOT EXISTS upgrades (
     introduced_race_id TEXT REFERENCES races(race_id),
     component_type_id TEXT NOT NULL REFERENCES car_component_types(component_type_id),
     title TEXT NOT NULL, change_description TEXT, technical_goal TEXT, expected_effect TEXT,
-    status TEXT NOT NULL, confidence TEXT NOT NULL, review_status TEXT NOT NULL DEFAULT 'published',
+    status TEXT NOT NULL, confidence TEXT NOT NULL,
+    review_status TEXT NOT NULL DEFAULT 'published'
+        CHECK(review_status IN ('pending_review','published','rejected')),
     event_fingerprint TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS specification_upgrades (
@@ -296,7 +310,12 @@ CREATE TABLE IF NOT EXISTS upgrade_sources (
 CREATE TABLE IF NOT EXISTS upgrade_lifecycle_events (
     event_id TEXT PRIMARY KEY, upgrade_id TEXT NOT NULL REFERENCES upgrades(upgrade_id),
     race_id TEXT REFERENCES races(race_id), session_id TEXT REFERENCES sessions(session_id),
-    event_type TEXT NOT NULL, timestamp TEXT, source TEXT NOT NULL
+    event_type TEXT NOT NULL CHECK(event_type IN
+        ('introduced','tested','retained','modified','removed','reintroduced','superseded','unknown')),
+    timestamp TEXT, source TEXT NOT NULL,
+    claim_id TEXT, lifecycle_claim_key TEXT,
+    review_status TEXT NOT NULL DEFAULT 'published'
+        CHECK(review_status IN ('pending_review','published','rejected'))
 );
 CREATE TABLE IF NOT EXISTS upgrade_relations (
     upgrade_id TEXT NOT NULL REFERENCES upgrades(upgrade_id),
@@ -325,10 +344,61 @@ CREATE TABLE IF NOT EXISTS source_snapshot_items (
     PRIMARY KEY(snapshot_id, entity_type, entity_id)
 );
 CREATE TABLE IF NOT EXISTS evolution_source_documents (
-    source_id TEXT PRIMARY KEY, race_id TEXT NOT NULL REFERENCES races(race_id),
-    publisher TEXT NOT NULL, source_type TEXT NOT NULL, publication_phase TEXT NOT NULL,
-    url TEXT NOT NULL UNIQUE, published_at TEXT, fetched_at TEXT NOT NULL,
-    cleaned_text TEXT NOT NULL, content_hash TEXT NOT NULL UNIQUE
+    source_id TEXT PRIMARY KEY, canonical_url TEXT NOT NULL UNIQUE,
+    publisher TEXT NOT NULL, source_type TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS evolution_source_revisions (
+    revision_id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES evolution_source_documents(source_id) ON DELETE CASCADE,
+    race_id TEXT NOT NULL REFERENCES races(race_id),
+    publication_phase TEXT NOT NULL CHECK(publication_phase IN ('pre_race','weekend','post_race','unknown')),
+    published_at TEXT, fetched_at TEXT NOT NULL, cleaned_text TEXT NOT NULL, content_hash TEXT NOT NULL,
+    UNIQUE(source_id, content_hash)
+);
+CREATE TABLE IF NOT EXISTS evidence_anchors (
+    anchor_id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES evolution_source_documents(source_id) ON DELETE CASCADE,
+    first_revision_id TEXT NOT NULL REFERENCES evolution_source_revisions(revision_id),
+    anchor_text TEXT NOT NULL, anchor_hash TEXT NOT NULL,
+    UNIQUE(source_id, anchor_hash)
+);
+CREATE TABLE IF NOT EXISTS evidence_anchor_revisions (
+    anchor_id TEXT NOT NULL REFERENCES evidence_anchors(anchor_id) ON DELETE CASCADE,
+    revision_id TEXT NOT NULL REFERENCES evolution_source_revisions(revision_id) ON DELETE CASCADE,
+    start_offset INTEGER, end_offset INTEGER,
+    PRIMARY KEY(anchor_id, revision_id)
+);
+CREATE TABLE IF NOT EXISTS evolution_claims (
+    claim_id TEXT PRIMARY KEY, claim_key TEXT NOT NULL UNIQUE,
+    race_id TEXT NOT NULL REFERENCES races(race_id),
+    team_season_id TEXT NOT NULL REFERENCES team_seasons(team_season_id),
+    component_type_id TEXT NOT NULL REFERENCES car_component_types(component_type_id),
+    primary_anchor_id TEXT NOT NULL REFERENCES evidence_anchors(anchor_id),
+    proposed_change TEXT NOT NULL, proposed_goal TEXT, proposed_expected_effect TEXT,
+    proposed_status TEXT NOT NULL, evidence_level TEXT NOT NULL, confidence TEXT NOT NULL,
+    review_status TEXT NOT NULL CHECK(review_status IN ('pending_review','published','rejected')),
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS claim_evidence (
+    claim_id TEXT NOT NULL REFERENCES evolution_claims(claim_id) ON DELETE CASCADE,
+    anchor_id TEXT NOT NULL REFERENCES evidence_anchors(anchor_id),
+    supports_field TEXT NOT NULL CHECK(supports_field IN
+        ('change','goal','expected_effect','status','driver_feedback')),
+    PRIMARY KEY(claim_id, anchor_id, supports_field)
+);
+CREATE TABLE IF NOT EXISTS claim_observations (
+    observation_id TEXT PRIMARY KEY,
+    claim_id TEXT NOT NULL REFERENCES evolution_claims(claim_id) ON DELETE CASCADE,
+    generation_id TEXT NOT NULL REFERENCES ai_generations(generation_id),
+    proposed_json TEXT NOT NULL, observed_at TEXT NOT NULL,
+    UNIQUE(claim_id, generation_id)
+);
+CREATE TABLE IF NOT EXISTS upgrade_claims (
+    upgrade_id TEXT NOT NULL REFERENCES upgrades(upgrade_id) ON DELETE CASCADE,
+    claim_id TEXT NOT NULL UNIQUE REFERENCES evolution_claims(claim_id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK(status IN ('pending_review','accepted','rejected')),
+    created_at TEXT NOT NULL, reviewed_at TEXT,
+    PRIMARY KEY(upgrade_id, claim_id)
 );
 CREATE TABLE IF NOT EXISTS evolution_upgrade_sources (
     upgrade_id TEXT NOT NULL REFERENCES upgrades(upgrade_id),
@@ -373,8 +443,8 @@ CREATE INDEX IF NOT EXISTS idx_raw_source_lookup
     ON raw_source_records(provider_id, external_id, retrieved_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_dedup
     ON interviews(driver_id, race_id, content_hash) WHERE content_hash IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_review_entity
-    ON review_items(entity_type, entity_id) WHERE entity_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_review_pending_entity
+    ON review_items(entity_type, entity_id) WHERE entity_id IS NOT NULL AND status='pending_review';
 '''
 
 
@@ -383,6 +453,116 @@ def _add_missing_columns(db: sqlite3.Connection, table: str, columns: dict[str, 
     for name, definition in columns.items():
         if name not in existing:
             db.execute(f'ALTER TABLE {table} ADD COLUMN {name} {definition}')
+
+
+def _legacy_anchor(text: str, change: str | None) -> tuple[str, int | None, int | None]:
+    if change:
+        start = text.casefold().find(change.casefold())
+        if start >= 0:
+            left = text.rfind('\n', 0, start) + 1
+            right = text.find('\n', start + len(change))
+            right = len(text) if right < 0 else right
+            return text[left:right].strip(), left, right
+    return (change or '[legacy reviewed Evolution event]'), None, None
+
+
+def _migrate_evolution_identity(db: sqlite3.Connection, now: str) -> None:
+    columns = {row[1] for row in db.execute('PRAGMA table_info(evolution_source_documents)')}
+    if 'canonical_url' not in columns:
+        old_rows = db.execute('''SELECT source_id,race_id,publisher,source_type,publication_phase,
+            url,published_at,fetched_at,cleaned_text,content_hash FROM evolution_source_documents''').fetchall()
+        db.execute('''CREATE TABLE evolution_source_documents_v11 (
+            source_id TEXT PRIMARY KEY, canonical_url TEXT NOT NULL UNIQUE,
+            publisher TEXT NOT NULL, source_type TEXT NOT NULL, created_at TEXT NOT NULL)''')
+        for row in old_rows:
+            old_source_id, race_id, publisher, source_type, phase, url, published, fetched, text, digest = row
+            url = _canonical_evolution_url(url)
+            source_id = 'src_' + hashlib.sha256(url.encode()).hexdigest()[:20]
+            db.execute('''INSERT INTO evolution_source_documents_v11 VALUES (?,?,?,?,?)
+                ON CONFLICT(canonical_url) DO NOTHING''',
+                       (source_id, url, publisher, source_type, fetched or now))
+            revision_id = 'rev_' + hashlib.sha256(f'{source_id}|{digest}'.encode()).hexdigest()[:24]
+            db.execute('''INSERT INTO evolution_source_revisions
+                (revision_id,source_id,race_id,publication_phase,published_at,fetched_at,cleaned_text,content_hash)
+                VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(source_id,content_hash) DO NOTHING''',
+                       (revision_id, source_id, race_id, phase, published, fetched, text, digest))
+            if old_source_id != source_id:
+                db.execute('UPDATE evolution_upgrade_sources SET source_id=? WHERE source_id=?',
+                           (source_id, old_source_id))
+        db.execute('DROP TABLE evolution_source_documents')
+        db.execute('ALTER TABLE evolution_source_documents_v11 RENAME TO evolution_source_documents')
+
+    _add_missing_columns(db, 'upgrade_lifecycle_events', {
+        'claim_id': 'TEXT', 'lifecycle_claim_key': 'TEXT',
+        'review_status': "TEXT NOT NULL DEFAULT 'published'",
+    })
+    db.execute('DROP INDEX IF EXISTS idx_upgrade_fingerprint')
+    db.execute('DROP INDEX IF EXISTS idx_review_entity')
+    db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_review_pending_entity
+        ON review_items(entity_type,entity_id)
+        WHERE entity_id IS NOT NULL AND status='pending_review' ''')
+    db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_lifecycle_claim
+        ON upgrade_lifecycle_events(upgrade_id,lifecycle_claim_key)
+        WHERE lifecycle_claim_key IS NOT NULL''')
+    db.executescript('''
+        CREATE TRIGGER IF NOT EXISTS upgrades_review_status_insert
+        BEFORE INSERT ON upgrades WHEN NEW.review_status NOT IN ('pending_review','published','rejected')
+        BEGIN SELECT RAISE(ABORT,'invalid upgrade review_status'); END;
+        CREATE TRIGGER IF NOT EXISTS upgrades_review_status_update
+        BEFORE UPDATE OF review_status ON upgrades WHEN NEW.review_status NOT IN ('pending_review','published','rejected')
+        BEGIN SELECT RAISE(ABORT,'invalid upgrade review_status'); END;
+        CREATE TRIGGER IF NOT EXISTS lifecycle_type_insert
+        BEFORE INSERT ON upgrade_lifecycle_events WHEN NEW.event_type NOT IN
+          ('introduced','tested','retained','modified','removed','reintroduced','superseded','unknown')
+        BEGIN SELECT RAISE(ABORT,'invalid lifecycle type'); END;
+    ''')
+
+    rows = db.execute('''SELECT u.upgrade_id,u.team_season_id,u.introduced_race_id,
+        u.component_type_id,u.change_description,u.technical_goal,u.expected_effect,u.status,
+        u.confidence,u.review_status,d.source_id,r.revision_id,r.cleaned_text
+        FROM upgrades u JOIN evolution_upgrade_sources eus ON eus.upgrade_id=u.upgrade_id
+        JOIN evolution_source_documents d ON d.source_id=eus.source_id
+        JOIN evolution_source_revisions r ON r.source_id=d.source_id
+        WHERE r.rowid=(SELECT r2.rowid FROM evolution_source_revisions r2
+            WHERE r2.source_id=d.source_id ORDER BY r2.fetched_at DESC LIMIT 1)''').fetchall()
+    for row in rows:
+        (upgrade_id, team_season_id, race_id, component_id, change, goal, effect,
+         event_type, confidence, review_status, source_id, revision_id, text) = row
+        anchor_text, start, end = _legacy_anchor(text, change)
+        anchor_hash = hashlib.sha256(' '.join(anchor_text.casefold().split()).encode()).hexdigest()
+        anchor_id = 'anc_' + hashlib.sha256(f'{source_id}|{anchor_hash}'.encode()).hexdigest()[:24]
+        claim_key = hashlib.sha256(
+            f'{race_id}|{team_season_id}|{component_id}|{anchor_id}'.encode()).hexdigest()
+        claim_id = 'clm_' + claim_key[:24]
+        db.execute('''INSERT INTO evidence_anchors
+            (anchor_id,source_id,first_revision_id,anchor_text,anchor_hash) VALUES (?,?,?,?,?)
+            ON CONFLICT(anchor_id) DO NOTHING''',
+                   (anchor_id, source_id, revision_id, anchor_text, anchor_hash))
+        db.execute('''INSERT INTO evidence_anchor_revisions VALUES (?,?,?,?)
+            ON CONFLICT(anchor_id,revision_id) DO NOTHING''', (anchor_id, revision_id, start, end))
+        db.execute('''INSERT INTO evolution_claims VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(claim_key) DO NOTHING''', (
+                claim_id, claim_key, race_id, team_season_id, component_id, anchor_id,
+                change or '', goal, effect, event_type, 'reported', confidence,
+                review_status, now, now,
+            ))
+        db.execute('''INSERT INTO claim_evidence VALUES (?,?,?)
+            ON CONFLICT(claim_id,anchor_id,supports_field) DO NOTHING''',
+                   (claim_id, anchor_id, 'change'))
+        mapping_status = {'published': 'accepted', 'rejected': 'rejected'}.get(
+            review_status, 'pending_review')
+        db.execute('''INSERT INTO upgrade_claims VALUES (?,?,?,?,?)
+            ON CONFLICT(claim_id) DO NOTHING''',
+                   (upgrade_id, claim_id, mapping_status, now,
+                    now if mapping_status != 'pending_review' else None))
+
+    for event_id, upgrade_id, race_id, source in db.execute('''SELECT event_id,upgrade_id,race_id,source
+        FROM upgrade_lifecycle_events WHERE lifecycle_claim_key IS NULL''').fetchall():
+        key = hashlib.sha256(f'{upgrade_id}|{race_id}|{source}'.encode()).hexdigest()
+        claim = db.execute('SELECT claim_id FROM upgrade_claims WHERE upgrade_id=? LIMIT 1',
+                           (upgrade_id,)).fetchone()
+        db.execute('''UPDATE upgrade_lifecycle_events SET lifecycle_claim_key=?,claim_id=?
+            WHERE event_id=?''', (key, claim[0] if claim else None, event_id))
 
 
 def migrate(path: str) -> None:
@@ -441,8 +621,7 @@ def migrate(path: str) -> None:
         _add_missing_columns(db, 'upgrades', {
             'review_status': "TEXT NOT NULL DEFAULT 'published'", 'event_fingerprint': 'TEXT',
         })
-        db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrade_fingerprint
-            ON upgrades(event_fingerprint) WHERE event_fingerprint IS NOT NULL''')
+        _migrate_evolution_identity(db, now)
         db.execute('''INSERT OR IGNORE INTO providers
             (provider_id,name,type,base_url,priority,status,created_at,updated_at)
             VALUES (?,?,?,?,?,?,?,?)''', (
@@ -461,6 +640,7 @@ def migrate(path: str) -> None:
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (8, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (9, ?)', (now,))
         db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (10, ?)', (now,))
+        db.execute('INSERT OR IGNORE INTO schema_migrations VALUES (11, ?)', (now,))
         db.execute('PRAGMA foreign_keys = ON')
 
 

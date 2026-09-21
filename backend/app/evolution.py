@@ -64,19 +64,24 @@ def load_evolution(path: str, season: int) -> EvolutionFeed:
             WHERE s.year=? AND u.review_status='published'
             AND (u.introduced_race_id IS NULL OR r.race_id IS NOT NULL)
             ORDER BY r.round IS NULL,r.round,u.created_at,u.upgrade_id''', (season,)).fetchall()
-        source_rows = db.execute('''SELECT us.* FROM upgrade_sources us
-            JOIN upgrades u ON u.upgrade_id=us.upgrade_id
+        source_rows = db.execute('''SELECT DISTINCT uc.upgrade_id,d.publisher AS provider,
+            d.canonical_url AS url,r.published_at
+            FROM upgrade_claims uc
+            JOIN evolution_claims c ON c.claim_id=uc.claim_id
+            JOIN claim_evidence ce ON ce.claim_id=c.claim_id
+            JOIN evidence_anchors a ON a.anchor_id=ce.anchor_id
+            JOIN evolution_source_documents d ON d.source_id=a.source_id
+            JOIN evolution_source_revisions r ON r.revision_id=a.first_revision_id
+            JOIN upgrades u ON u.upgrade_id=uc.upgrade_id
             JOIN team_seasons ts ON ts.team_season_id=u.team_season_id
             JOIN seasons s ON s.season_id=ts.season_id
-            WHERE s.year=? AND u.review_status='published'
-            ORDER BY us.source_id''', (season,)).fetchall()
+            WHERE s.year=? AND u.review_status='published' AND c.review_status='published'
+            AND uc.status='accepted' ORDER BY d.canonical_url''', (season,)).fetchall()
         race_rows = db.execute('''SELECT r.display_name AS race,r.round
             FROM races r JOIN seasons s ON s.season_id=r.season_id
             WHERE s.year=? AND r.round IS NOT NULL ORDER BY r.round''', (season,)).fetchall()
     sources = {}
     for row in source_rows:
-        if not row['original_text'].strip():
-            continue
         try:
             source = UpgradeSource(provider=row['provider'], url=row['url'],
                                    published_at=row['published_at'])

@@ -1,8 +1,11 @@
 import json
+import hashlib
 import os
 import socket
+import sqlite3
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -10,11 +13,14 @@ from unittest.mock import patch
 import httpx
 
 from app.evolution_worker.llm import DeepSeekProvider
-from app.evolution_worker.models import ExtractionBatch, SourceDocument
-from app.evolution_worker.sources import TrustedUrlProvider, clean_html, deduplicate, validate_public_url
+from app.evolution_worker.models import ExtractionBatch, SourceDocument, UpgradeStatus
+from app.evolution_worker.sources import (
+    TrustedUrlProvider, canonical_url, clean_html, deduplicate, validate_public_url,
+)
 from app.evolution_worker.validator import validate_batch
 from app.evolution_worker.persistence import persist_validated, review
 from app.data_schema import connect
+from app.evolution import load_evolution
 from app.models import RaceFeed
 from app.providers.jolpica import normalize
 from app.repositories.schedules import ScheduleRepository
@@ -25,14 +31,39 @@ def public_resolver(host, port):
     return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', port))]
 
 
-def source(source_id='src_one', text='The team tested a revised floor geometry during FP1.'):
+def source(source_id='src_one', text='The team tested a revised floor geometry during FP1.',
+           url=None, team_ids=None):
     return SourceDocument(
         source_id=source_id, race_id='2026-1', publisher='formula1.com',
         source_type='formula1_official', source_tier=2, title='Technical update',
-        url=f'https://www.formula1.com/{source_id}', fetched_at=datetime.now(timezone.utc),
+        url=url or f'https://www.formula1.com/{source_id}', fetched_at=datetime.now(timezone.utc),
+        team_ids=team_ids or [],
         raw_text=text, cleaned_text=text,
-        content_hash=f'hash-{source_id}',
+        content_hash=hashlib.sha256(text.encode()).hexdigest(),
     )
+
+
+def setup_database(path):
+    ScheduleRepository(path)._persist(RaceFeed(
+        races=[normalize(sample())], updated_at=datetime.now(timezone.utc)))
+    with closing(connect(path)) as db, db:
+        season_id = db.execute('SELECT season_id FROM seasons').fetchone()[0]
+        db.execute("INSERT INTO teams(team_id,canonical_name,status,created_at,updated_at) VALUES ('mer','Mercedes','active','2026-01-01','2026-01-01')")
+        db.execute("INSERT INTO team_seasons(team_season_id,team_id,season_id,display_name,status) VALUES ('mer26','mer',?,'Mercedes','active')", (season_id,))
+
+
+def extraction(change='Revised floor geometry', quote='tested a revised floor geometry during FP1',
+               component='floor', team='mercedes', source_ids=None, status='tested'):
+    source_ids = source_ids or ['src_one']
+    return ExtractionBatch.model_validate({'results': [{
+        'race_id': '2026-1', 'team_id': team, 'updates': [{
+            'component_id': component, 'change': change, 'goal': None,
+            'expected_effect': None, 'status': status, 'evidence_level': 'confirmed',
+            'driver_feedback': [], 'source_ids': source_ids, 'confidence': .7,
+            'evidence': [{'source_id': item, 'quote': quote, 'supports': ['change', 'status']}
+                         for item in source_ids],
+        }],
+    }]})
 
 
 class EvolutionSourceTests(unittest.IsolatedAsyncioTestCase):
@@ -158,6 +189,12 @@ class DeepSeekTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PersistenceTests(unittest.TestCase):
+    def persist(self, path, documents, batch):
+        validated = validate_batch(batch, documents)
+        result = persist_validated(path, documents, validated.results, provider='deepseek',
+                                   model='test', prompt_version='p', pipeline_version='v')
+        return validated, result
+
     def test_pending_events_are_idempotent_and_publishable(self):
         with tempfile.TemporaryDirectory() as directory:
             path = f'{directory}/db.sqlite'
@@ -190,6 +227,201 @@ class PersistenceTests(unittest.TestCase):
             with closing(connect(path)) as db:
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_source_documents').fetchone()[0], 1)
                 self.assertEqual(db.execute('SELECT COUNT(*) FROM upgrades').fetchone()[0], 1)
+
+    def test_identity_uses_anchor_not_model_prose_or_team_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            document = source()
+            first, _ = self.persist(path, [document], extraction())
+            second, result = self.persist(path, [document], extraction(
+                change='A revised floor geometry was tested',
+                quote='The team tested a revised floor geometry during FP1.',
+                team='Mercedes AMG'))
+            self.assertEqual(first.results[0].updates[0].anchors[0].anchor_id,
+                             second.results[0].updates[0].anchors[0].anchor_id)
+            self.assertEqual(result['inserted'], 0)
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_claims').fetchone()[0], 1)
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM upgrades').fetchone()[0], 1)
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM claim_observations').fetchone()[0], 2)
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM ai_generations').fetchone()[0], 2)
+
+    def test_source_revisions_and_equal_content_on_different_urls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            original = source()
+            self.persist(path, [original], extraction())
+            changed = source(text=original.cleaned_text + '\nA later editorial note.')
+            self.persist(path, [changed], extraction())
+            other = source('src_other', original.cleaned_text,
+                           url='https://www.formula1.com/other')
+            self.persist(path, [other], extraction(source_ids=['src_other']))
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_source_documents').fetchone()[0], 2)
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_source_revisions').fetchone()[0], 3)
+            self.assertEqual(canonical_url('https://formula1.com/a/?utm_source=x&round=2#top'),
+                             'https://formula1.com/a?round=2')
+
+    def test_two_evidence_lines_are_two_claims_and_component_change_is_conflict(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            text = 'The team tested a revised floor geometry during FP1.\nA second floor edge was added for FP2.'
+            document = source(text=text)
+            batch = extraction()
+            update = batch.results[0].updates[0]
+            update.evidence.append(update.evidence[0].model_copy(update={
+                'quote': 'A second floor edge was added for FP2.',
+            }))
+            validated, first = self.persist(path, [document], batch)
+            self.assertEqual(len(validated.results[0].updates[0].anchors), 2)
+            self.assertEqual(first['inserted'], 2)
+            conflict = extraction(component='other')
+            _, result = self.persist(path, [document], conflict)
+            self.assertEqual(result['conflicts'], 1)
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_claims').fetchone()[0], 2)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM review_items WHERE issue_type='component_conflict' AND status='pending_review'").fetchone()[0], 1)
+
+    def test_published_and_rejected_claims_are_stable(self):
+        for action in ('publish', 'reject'):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as directory:
+                path = f'{directory}/db.sqlite'
+                setup_database(path)
+                document = source()
+                self.persist(path, [document], extraction())
+                event_id = review(path, 'list')[0]['id']
+                review(path, action, event_id)
+                with closing(connect(path)) as db:
+                    before = db.execute('''SELECT change_description,technical_goal,expected_effect,
+                        status,confidence,review_status FROM upgrades WHERE upgrade_id=?''',
+                                        (event_id,)).fetchone()
+                self.persist(path, [document], extraction(change='Different model wording'))
+                with closing(connect(path)) as db:
+                    after = db.execute('''SELECT change_description,technical_goal,expected_effect,
+                        status,confidence,review_status FROM upgrades WHERE upgrade_id=?''',
+                                       (event_id,)).fetchone()
+                    self.assertEqual(db.execute('SELECT COUNT(*) FROM upgrades').fetchone()[0], 1)
+                self.assertEqual(before, after)
+                self.assertEqual(bool(load_evolution(path, 2026).upgrades), action == 'publish')
+
+    def test_manual_multi_source_merge_controls_public_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            first = source('src_one', 'The team tested a revised floor geometry during FP1.')
+            second = source('src_two', 'Engineers confirmed the revised floor geometry after the race.',
+                            url='https://www.mclaren.com/racing/report', team_ids=['mercedes'])
+            batch = ExtractionBatch.model_validate({'results': [{
+                'race_id': '2026-1', 'team_id': 'Mercedes', 'updates': [{
+                    'component_id': 'floor', 'change': 'Revised floor geometry', 'goal': None,
+                    'expected_effect': None, 'status': 'tested', 'evidence_level': 'confirmed',
+                    'driver_feedback': [], 'source_ids': ['src_one', 'src_two'], 'confidence': .8,
+                    'evidence': [
+                        {'source_id': 'src_one', 'quote': first.cleaned_text, 'supports': ['change', 'status']},
+                        {'source_id': 'src_two', 'quote': second.cleaned_text, 'supports': ['change']},
+                    ],
+                }],
+            }]})
+            self.persist(path, [first, second], batch)
+            with closing(connect(path)) as db:
+                mappings = db.execute('SELECT claim_id,upgrade_id FROM upgrade_claims ORDER BY claim_id').fetchall()
+            review(path, 'publish', mappings[0][1])
+            self.assertEqual(len(load_evolution(path, 2026).upgrades[0].sources), 1)
+            review(path, 'merge', mappings[1][0], mappings[0][1])
+            feed = load_evolution(path, 2026)
+            self.assertEqual(len(feed.upgrades), 1)
+            self.assertEqual(len(feed.upgrades[0].sources), 2)
+
+    def test_lifecycle_conflict_does_not_duplicate_event_and_review_can_reopen(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            document = source()
+            validated, _ = self.persist(path, [document], extraction())
+            changed_update = validated.results[0].updates[0].model_copy(
+                update={'status': UpgradeStatus.INTRODUCED})
+            changed_results = [validated.results[0].model_copy(update={'updates': [changed_update]})]
+            persist_validated(path, [document], changed_results, provider='deepseek', model='test',
+                              prompt_version='p', pipeline_version='v')
+            with closing(connect(path)) as db, db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM upgrade_lifecycle_events').fetchone()[0], 1)
+                item = db.execute("SELECT review_id FROM review_items WHERE entity_type='evolution_lifecycle' AND status='pending_review'").fetchone()[0]
+                db.execute("UPDATE review_items SET status='published',resolved_at='now' WHERE review_id=?", (item,))
+            persist_validated(path, [document], changed_results, provider='deepseek', model='test',
+                              prompt_version='p', pipeline_version='v')
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM review_items WHERE entity_type='evolution_lifecycle'").fetchone()[0], 2)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM review_items WHERE entity_type='evolution_lifecycle' AND status='pending_review'").fetchone()[0], 1)
+
+    def test_concurrent_claim_write_and_transaction_rollback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            document = source()
+            validated = validate_batch(extraction(), [document])
+            args = (path, [document], validated.results)
+            kwargs = dict(provider='deepseek', model='test', prompt_version='p', pipeline_version='v')
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [pool.submit(persist_validated, *args, **kwargs) for _ in range(2)]
+                [future.result() for future in futures]
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_claims').fetchone()[0], 1)
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM upgrades').fetchone()[0], 1)
+
+            rollback_path = f'{directory}/rollback.sqlite'
+            setup_database(rollback_path)
+            with patch('app.evolution_worker.persistence._open_review', side_effect=RuntimeError('stop')):
+                with self.assertRaises(RuntimeError):
+                    persist_validated(rollback_path, [document], validated.results, **kwargs)
+            with closing(connect(rollback_path)) as db:
+                for table in ('evolution_source_documents', 'evolution_claims', 'upgrades', 'ai_generations'):
+                    self.assertEqual(db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0], 0)
+
+    def test_legacy_published_upgrade_migrates_without_reinterpretation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute('PRAGMA foreign_keys=OFF')
+                for table in ('claim_observations', 'claim_evidence', 'upgrade_claims',
+                              'evolution_claims', 'evidence_anchor_revisions',
+                              'evidence_anchors', 'evolution_source_revisions'):
+                    db.execute(f'DROP TABLE {table}')
+                db.execute('DROP TABLE evolution_source_documents')
+                db.execute('''CREATE TABLE evolution_source_documents (
+                    source_id TEXT PRIMARY KEY,race_id TEXT NOT NULL,publisher TEXT NOT NULL,
+                    source_type TEXT NOT NULL,publication_phase TEXT NOT NULL,url TEXT NOT NULL UNIQUE,
+                    published_at TEXT,fetched_at TEXT NOT NULL,cleaned_text TEXT NOT NULL,
+                    content_hash TEXT NOT NULL UNIQUE)''')
+                race = db.execute('SELECT race_id FROM races').fetchone()[0]
+                db.execute("INSERT INTO technical_eras VALUES ('era26','Era',NULL,NULL,NULL,'active')")
+                db.execute("INSERT INTO car_component_types(component_type_id,technical_era_id,canonical_name,status) VALUES ('floor','era26','Floor','active')")
+                db.execute('''INSERT INTO upgrades
+                    (upgrade_id,team_season_id,introduced_race_id,component_type_id,title,
+                    change_description,technical_goal,status,confidence,review_status,created_at,updated_at)
+                    VALUES ('cadillac-floor','mer26',?,'floor','Floor update',
+                    'Added a vane to the diffuser sidewall.','Increase rear load','introduced','0.75',
+                    'published','2026-01-01','2026-01-01')''', (race,))
+                text = 'Added a vane to the diffuser sidewall. Increase rear load.'
+                db.execute('''INSERT INTO evolution_source_documents VALUES
+                    ('old-source',?,'formula1.com','formula1_official','pre_race',
+                    'https://formula1.com/report/?utm_source=test',NULL,'2026-01-01',?,?)''',
+                           (race, text, hashlib.sha256(text.encode()).hexdigest()))
+                db.execute("INSERT INTO evolution_upgrade_sources VALUES ('cadillac-floor','old-source')")
+            from app.data_schema import migrate
+            migrate(path)
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute('SELECT canonical_url FROM evolution_source_documents').fetchone()[0],
+                                 'https://formula1.com/report')
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM evolution_source_revisions').fetchone()[0], 1)
+                self.assertEqual(db.execute("SELECT status FROM upgrade_claims WHERE upgrade_id='cadillac-floor'").fetchone()[0], 'accepted')
+                self.assertEqual(db.execute("SELECT review_status FROM upgrades WHERE upgrade_id='cadillac-floor'").fetchone()[0], 'published')
+            feed = load_evolution(path, 2026)
+            self.assertEqual(feed.upgrades[0].id, 'cadillac-floor')
+            self.assertEqual(feed.upgrades[0].change, 'Added a vane to the diffuser sidewall.')
 
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -44,6 +44,19 @@ TEAM_DOMAINS = {
 USER_AGENT = 'GrandPrixReminder-Evolution/0.1 (+evidence-only collector)'
 MAX_BODY_BYTES = 2_000_000
 MAX_DOCUMENT_CHARS = 40_000
+TRACKING_QUERY_KEYS = {'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref', 'source'}
+
+
+def canonical_url(url: str) -> str:
+    parsed = urlsplit(url)
+    query = urlencode([
+        (key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if not key.casefold().startswith('utm_') and key.casefold() not in TRACKING_QUERY_KEYS
+    ])
+    path = parsed.path or '/'
+    if path != '/':
+        path = path.rstrip('/')
+    return urlunsplit((parsed.scheme.casefold(), parsed.netloc.casefold(), path, query, ''))
 
 
 class _TextExtractor(HTMLParser):
@@ -133,7 +146,7 @@ def validate_public_url(url: str, resolver=socket.getaddrinfo) -> tuple[str, int
         ip = ipaddress.ip_address(address)
         if not ip.is_global:
             raise ValueError(f'Source host resolved to a non-public address: {parsed.hostname}')
-    normalized = urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path or '/', parsed.query, ''))
+    normalized = canonical_url(url)
     return normalized, *policy
 
 

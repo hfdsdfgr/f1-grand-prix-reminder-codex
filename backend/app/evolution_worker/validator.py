@@ -1,12 +1,37 @@
+import hashlib
 import re
 
 from app.evolution_worker.models import (
     EvidenceLevel, EvolutionExtraction, ExtractionBatch, UpgradeStatus, ValidatedBatch,
+    EvidenceAnchor,
 )
 
 
 def _normalized(value: str) -> str:
     return re.sub(r'\s+', ' ', value).strip().casefold()
+
+
+def _anchor(source, quote: str, supports: list[str]) -> EvidenceAnchor | None:
+    words = re.findall(r'\S+', quote)
+    if not words:
+        return None
+    match = re.search(r'\s+'.join(re.escape(word) for word in words), source.cleaned_text,
+                      re.IGNORECASE)
+    if not match:
+        return None
+    start = source.cleaned_text.rfind('\n', 0, match.start()) + 1
+    end = source.cleaned_text.find('\n', match.end())
+    if end < 0:
+        end = len(source.cleaned_text)
+    text = source.cleaned_text[start:end].strip()
+    start += len(source.cleaned_text[start:end]) - len(source.cleaned_text[start:end].lstrip())
+    end = start + len(text)
+    canonical = _normalized(text)
+    digest = hashlib.sha256(canonical.encode()).hexdigest()
+    anchor_id = 'anc_' + hashlib.sha256(f'{source.source_id}|{digest}'.encode()).hexdigest()[:24]
+    return EvidenceAnchor(anchor_id=anchor_id, source_id=source.source_id, anchor_text=text,
+                          start_offset=start, end_offset=end, anchor_hash=digest,
+                          supports=list(dict.fromkeys(supports)))
 
 
 def _sourced_status(quotes: str) -> UpgradeStatus:
@@ -42,6 +67,7 @@ def validate_batch(batch: ExtractionBatch, documents) -> ValidatedBatch:
             prefix = f'{result.team_id}/{update.component_id}/{index}'
             source_ids = list(dict.fromkeys(item for item in update.source_ids if item in sources))
             evidence = []
+            anchors = []
             supported: set[str] = set()
             for item in update.evidence:
                 source = sources.get(item.source_id)
@@ -49,9 +75,12 @@ def validate_batch(batch: ExtractionBatch, documents) -> ValidatedBatch:
                         and _normalized(item.quote) in _normalized(source.cleaned_text)):
                     evidence.append(item)
                     supported.update(item.supports)
+                    anchor = _anchor(source, item.quote, item.supports)
+                    if anchor and all(existing.anchor_id != anchor.anchor_id for existing in anchors):
+                        anchors.append(anchor)
                 else:
                     issues.append(f'{prefix}: discarded unverifiable quote')
-            if not source_ids or 'change' not in supported:
+            if not source_ids or 'change' not in supported or not any('change' in a.supports for a in anchors):
                 issues.append(f'{prefix}: discarded update without sourced change evidence')
                 continue
             goal = update.goal if 'goal' in supported else None
@@ -85,6 +114,7 @@ def validate_batch(batch: ExtractionBatch, documents) -> ValidatedBatch:
                 'source_ids': source_ids, 'evidence': evidence, 'goal': goal,
                 'expected_effect': effect, 'status': status, 'evidence_level': level,
                 'driver_feedback': feedback,
+                'anchors': anchors,
                 'confidence': round(max(0.0, min(1.0, confidence)), 2),
             }))
         results.append(result.model_copy(update={'updates': accepted}))

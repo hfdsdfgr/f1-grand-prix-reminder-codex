@@ -69,6 +69,18 @@ class ClaimEvidence(BaseModel):
     supports: list[Literal['change', 'goal', 'expected_effect', 'status', 'driver_feedback']]
 
 
+class EvidenceAnchor(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    anchor_id: str
+    source_id: str
+    anchor_text: str
+    start_offset: int
+    end_offset: int
+    anchor_hash: str
+    supports: list[Literal['change', 'goal', 'expected_effect', 'status', 'driver_feedback']]
+
+
 class DriverFeedback(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
@@ -89,6 +101,7 @@ class EvolutionUpdate(BaseModel):
     driver_feedback: list[DriverFeedback] = Field(default_factory=list)
     source_ids: list[str]
     evidence: list[ClaimEvidence]
+    anchors: list[EvidenceAnchor] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 

@@ -28,8 +28,12 @@ class EvolutionTests(unittest.TestCase):
                     db.execute('''INSERT INTO upgrades(upgrade_id,team_season_id,introduced_race_id,
                         component_type_id,title,status,confidence,created_at,updated_at)
                         VALUES (?,'ts',?,'floor','Test floor','tested','high','2026-01-01','2026-01-01')''', (uid, race))
-                db.execute('''INSERT INTO upgrade_sources VALUES
-                    ('source','sourced','Test','https://example.com/test',NULL,'2026-01-01','Original text')''')
+                db.execute("INSERT INTO evolution_source_documents VALUES ('source','https://example.com/test','Test','team_official','2026-01-01')")
+                db.execute("INSERT INTO evolution_source_revisions VALUES ('revision','source',?,'post_race',NULL,'2026-01-01','Original text','hash')", (race,))
+                db.execute("INSERT INTO evidence_anchors VALUES ('anchor','source','revision','Original text','anchor-hash')")
+                db.execute("INSERT INTO evolution_claims VALUES ('claim','claim-key',?,'ts','floor','anchor','Test floor',NULL,NULL,'tested','confirmed','1','published','2026-01-01','2026-01-01')", (race,))
+                db.execute("INSERT INTO claim_evidence VALUES ('claim','anchor','change')")
+                db.execute("INSERT INTO upgrade_claims VALUES ('sourced','claim','accepted','2026-01-01','2026-01-01')")
             feed = load_evolution(path, 2026)
             self.assertEqual([u.id for u in feed.upgrades], ['sourced'])
             self.assertEqual(feed.upgrades[0].race_id, '2026-1')
@@ -39,5 +43,5 @@ class EvolutionTests(unittest.TestCase):
             self.assertEqual(feed.timeline[0].upgrade_ids, ['sourced'])
             self.assertEqual(load_evolution(path, 2025).upgrades, [])
             with closing(connect(path)) as db, db:
-                db.execute("UPDATE upgrade_sources SET url='javascript:alert(1)'")
+                db.execute("UPDATE evolution_source_documents SET canonical_url='javascript:alert(1)'")
             self.assertEqual(load_evolution(path, 2026).upgrades, [])
