@@ -8,6 +8,7 @@ import '../../data/reminder_service.dart';
 import '../../shared/race_feed_view.dart';
 import '../../shared/race_briefing_view.dart';
 import '../../shared/follow_context.dart';
+import '../evolution/evolution_page.dart';
 import '../home/home_page.dart';
 import '../home/reminder_controls.dart';
 
@@ -69,6 +70,20 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
       _impactRequest ??= widget.repository.championshipImpact(widget.race.id);
 
   void _refreshImpact() => setState(() => _impactRequest = null);
+
+  List<ResultEntry> _ordered(List<ResultEntry> entries) {
+    final follows = widget.follows;
+    if (follows == null) return entries;
+    return [...entries]..sort((a, b) {
+      final aFollowed =
+          (a.driverId != null && follows.followsDriver(a.driverId!)) ||
+          (a.teamId != null && follows.followsTeam(a.teamId!));
+      final bFollowed =
+          (b.driverId != null && follows.followsDriver(b.driverId!)) ||
+          (b.teamId != null && follows.followsTeam(b.teamId!));
+      return (bFollowed ? 1 : 0).compareTo(aFollowed ? 1 : 0);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -263,7 +278,7 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                 const SizedBox(height: 24),
                 const Divider(),
               ],
-              for (final entry in feed.entries) ...[
+              for (final entry in _ordered(feed.entries)) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Column(
@@ -281,7 +296,11 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                       ),
                       if (widget.follows case final follows?) ...[
                         const SizedBox(height: 8),
-                        _FollowActions(entry: entry, follows: follows),
+                        _FollowActions(
+                          entry: entry,
+                          follows: follows,
+                          onChanged: () => setState(() {}),
+                        ),
                       ],
                       const SizedBox(height: 12),
                       if (_qualifying)
@@ -345,6 +364,30 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                 RaceBriefingView(
                   repository: widget.repository,
                   raceId: widget.race.id,
+                  follows: widget.follows,
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: Text(tr(context, 'Evolution'))),
+                        body: SafeArea(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                            child: EvolutionPage(
+                              repository: widget.repository,
+                              raceId: widget.race.id,
+                              follows: widget.follows,
+                              enableGltf: false,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.build_outlined),
+                  label: Text(tr(context, 'Evolution')),
                 ),
               ],
               Text(
@@ -769,7 +812,12 @@ IconData _storyIcon(String kind) => switch (kind) {
 class _FollowActions extends StatelessWidget {
   final ResultEntry entry;
   final FollowService follows;
-  const _FollowActions({required this.entry, required this.follows});
+  final VoidCallback onChanged;
+  const _FollowActions({
+    required this.entry,
+    required this.follows,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -782,13 +830,19 @@ class _FollowActions extends StatelessWidget {
           _FollowButton(
             label: 'driver',
             followed: follows.followsDriver(id),
-            onPressed: () => follows.toggleDriver(id, entry.driver),
+            onPressed: () async {
+              await follows.toggleDriver(id, entry.driver);
+              onChanged();
+            },
           ),
         if (entry.teamId case final id?)
           _FollowButton(
             label: 'team',
             followed: follows.followsTeam(id),
-            onPressed: () => follows.toggleTeam(id, entry.team),
+            onPressed: () async {
+              await follows.toggleTeam(id, entry.team);
+              onChanged();
+            },
           ),
       ],
     ),

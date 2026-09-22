@@ -224,6 +224,15 @@ class RaceRepository {
       cached: cached,
     );
   }
+
+  Future<EvolutionFeed> evolutionRace(String raceId) async {
+    final path = '/api/v1/evolution/${Uri.encodeComponent(raceId)}';
+    final (json, cached) = await _get(path, const Duration(seconds: 20));
+    return EvolutionFeed(
+      Map<String, dynamic>.from(json as Map),
+      cached: cached,
+    );
+  }
 }
 
 class UpgradeEntry {
@@ -441,9 +450,13 @@ class ChampionshipImpactFeed {
 
 class BriefingInsight {
   final String topic, detail;
+  final List<BriefingSource> sources;
   BriefingInsight(Map<String, dynamic> json)
     : topic = json['topic'] as String,
-      detail = json['detail'] as String;
+      detail = json['detail'] as String,
+      sources = (json['sources'] as List<dynamic>? ?? const [])
+          .map((item) => BriefingSource(item as Map<String, dynamic>))
+          .toList();
 }
 
 class BriefingSource {
@@ -469,7 +482,7 @@ class RaceBriefingFeed {
       insights = (json['insights'] as List)
           .map((item) => BriefingInsight(item as Map<String, dynamic>))
           .toList(),
-      sources = (json['sources'] as List)
+      sources = (json['sources'] as List<dynamic>? ?? const [])
           .map((item) => BriefingSource(item as Map<String, dynamic>))
           .toList(),
       updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),

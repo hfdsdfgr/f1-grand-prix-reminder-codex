@@ -1,18 +1,32 @@
 import 'package:flutter/material.dart';
 
 import '../../core/language.dart';
+import '../../core/spoilers.dart';
+import '../../data/follow_service.dart';
 import '../../data/race_repository.dart';
 import '../../shared/race_briefing_view.dart';
 
 class BriefingPage extends StatefulWidget {
   final RaceRepository repository;
-  const BriefingPage({super.key, required this.repository});
+  final bool spoilerFree;
+  final Set<String> revealedSessions;
+  final ValueChanged<String>? onRevealSession;
+  final FollowService? follows;
+  const BriefingPage({
+    super.key,
+    required this.repository,
+    this.spoilerFree = false,
+    this.revealedSessions = const {},
+    this.onRevealSession,
+    this.follows,
+  });
 
   @override
   State<BriefingPage> createState() => _BriefingPageState();
 }
 
 class _BriefingPageState extends State<BriefingPage> {
+  String? _raceId;
   late Future<RaceFeed> _request = widget.repository.load(
     season: DateTime.now().year,
     summaries: false,
@@ -50,7 +64,11 @@ class _BriefingPageState extends State<BriefingPage> {
       final completed = snapshot.data!.races
           .where((race) => race.lifecyclePhase == 'post_race')
           .toList();
-      final race = completed.isEmpty ? null : completed.last;
+      Race? race;
+      for (final item in completed) {
+        if (item.id == _raceId) race = item;
+      }
+      race ??= completed.isEmpty ? null : completed.last;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -62,6 +80,23 @@ class _BriefingPageState extends State<BriefingPage> {
           if (race == null)
             Text(tr(context, 'No completed race is available for briefing.'))
           else ...[
+            if (completed.length > 1) ...[
+              DropdownButtonFormField<String>(
+                initialValue: race.id,
+                decoration: InputDecoration(
+                  labelText: tr(context, 'Grand Prix'),
+                ),
+                items: [
+                  for (final item in completed)
+                    DropdownMenuItem(
+                      value: item.id,
+                      child: Text(tr(context, item.name)),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _raceId = value),
+              ),
+              const SizedBox(height: 20),
+            ],
             Text(
               tr(context, race.name),
               style: Theme.of(context).textTheme.headlineSmall,
@@ -71,6 +106,15 @@ class _BriefingPageState extends State<BriefingPage> {
               repository: widget.repository,
               raceId: race.id,
               showTitle: false,
+              spoilerHidden: hidesRaceResult(
+                enabled: widget.spoilerFree,
+                phase: race.lifecyclePhase,
+                raceId: race.id,
+                revealedSessions: widget.revealedSessions,
+              ),
+              onReveal: () =>
+                  widget.onRevealSession?.call(spoilerSessionKey(race!.id)),
+              follows: widget.follows,
             ),
           ],
         ],

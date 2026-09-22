@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 
 import '../core/language.dart';
+import '../data/follow_service.dart';
 import '../data/race_repository.dart';
+
+final _neverNotify = _NeverNotify();
 
 class RaceBriefingView extends StatefulWidget {
   final RaceRepository repository;
   final String raceId;
   final bool showTitle;
+  final bool spoilerHidden;
+  final VoidCallback? onReveal;
+  final FollowService? follows;
   const RaceBriefingView({
     super.key,
     required this.repository,
     required this.raceId,
     this.showTitle = true,
+    this.spoilerHidden = false,
+    this.onReveal,
+    this.follows,
   });
 
   @override
@@ -61,6 +70,9 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
           ],
         );
       }
+      if (widget.spoilerHidden) {
+        return _BriefingSpoilerGate(onReveal: widget.onReveal);
+      }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -90,27 +102,18 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
             Text(
               tr(context, 'No verified briefing is available for this race.'),
             ),
-          for (final insight in briefing.insights)
-            Semantics(
-              container: true,
-              label: '${tr(context, insight.topic)}. ${insight.detail}',
-              child: ExcludeSemantics(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tr(context, insight.topic),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(insight.detail),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          AnimatedBuilder(
+            animation: widget.follows ?? _neverNotify,
+            builder: (context, _) {
+              final insights = [...briefing.insights]
+                ..sort((a, b) => _followScore(b).compareTo(_followScore(a)));
+              return Column(
+                children: [
+                  for (final insight in insights) _Insight(insight: insight),
+                ],
+              );
+            },
+          ),
           if (briefing.sources.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -137,4 +140,78 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
       );
     },
   );
+
+  int _followScore(BriefingInsight insight) {
+    final follows = widget.follows;
+    if (follows == null) return 0;
+    final content = '${insight.topic} ${insight.detail}'.toLowerCase();
+    return [
+          ...follows.drivers,
+          ...follows.teams,
+        ].any((entry) => content.contains(entry.name.toLowerCase()))
+        ? 1
+        : 0;
+  }
 }
+
+class _Insight extends StatelessWidget {
+  final BriefingInsight insight;
+  const _Insight({required this.insight});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    label: '${tr(context, insight.topic)}. ${insight.detail}',
+    child: ExcludeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr(context, insight.topic),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            Text(insight.detail),
+            for (final source in insight.sources)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  source.provider == null
+                      ? source.url
+                      : '${source.provider} · ${source.url}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _BriefingSpoilerGate extends StatelessWidget {
+  final VoidCallback? onReveal;
+  const _BriefingSpoilerGate({this.onReveal});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        tr(context, 'Briefing hidden'),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 8),
+      Text(tr(context, 'Results hidden')),
+      const SizedBox(height: 16),
+      FilledButton(
+        onPressed: onReveal,
+        child: Text(tr(context, 'Reveal this session')),
+      ),
+    ],
+  );
+}
+
+class _NeverNotify extends ChangeNotifier {}
