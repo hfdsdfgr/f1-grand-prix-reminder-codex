@@ -7,8 +7,8 @@ from contextlib import closing
 from app.data_schema import connect, migrate, new_id, utc_now
 from app.evolution_worker.llm import DeepSeekProvider, LLMProvider
 from app.evolution_worker.models import BriefingFact, SourceDocument
-from app.evolution_worker.sources import OfficialSourceDiscovery, TrustedUrlProvider
-from app.evolution_worker.worker import race_context
+from app.evolution_worker.sources import OfficialSourceDiscovery, TrustedUrlProvider, publication_phase
+from app.evolution_worker.worker import race_context, race_window
 
 
 PIPELINE_VERSION = 'briefing-evidence-v1'
@@ -134,9 +134,15 @@ async def execute_briefing(path: str, race_id: str, urls: list[str] | None = Non
         return {'race_id': race_id, 'sources': [], 'provider_failures': [],
                 'persistence': {'inserted': 0, 'observed': 0, 'status': 'no_official_source'}}
     collection = await TrustedUrlProvider().collect(race_id, urls)
+    race_start, race_end = race_window(path, race_id)
+    collection.documents = [item.model_copy(update={
+        'publication_phase': publication_phase(item.published_at, race_start, race_end),
+    }) for item in collection.documents]
+    collection.documents = [item for item in collection.documents
+                            if item.publication_phase in {'post_race', 'unknown'}]
     if not collection.documents:
         return {'race_id': race_id, 'sources': [], 'provider_failures': collection.failures,
-                'persistence': {'inserted': 0, 'observed': 0, 'status': 'no_readable_source'}}
+                'persistence': {'inserted': 0, 'observed': 0, 'status': 'no_post_race_source'}}
     internal_race_id, snapshot_id, interviews = _store_sources(path, race_id, collection.documents)
     if _existing(path, internal_race_id, snapshot_id):
         persistence = {'inserted': 0, 'observed': 0, 'status': 'reused'}
