@@ -66,11 +66,11 @@ class BriefingWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['persistence']['status'], 'no_official_source')
 
     def test_discovery_relevance_requires_race_evidence(self):
-        relevant = document('The Spanish Grand Prix race report says tyre degradation was manageable.')
+        relevant = document('The 2026 Spanish Grand Prix race report says tyre degradation was manageable.')
         unrelated = document('A preview of the Japanese Grand Prix.')
         keywords = OfficialSourceDiscovery._keywords('Spanish Grand Prix', 'Madring', 'Spain', 'Madrid')
-        self.assertTrue(OfficialSourceDiscovery._is_relevant(relevant, 'Spanish Grand Prix', keywords))
-        self.assertFalse(OfficialSourceDiscovery._is_relevant(unrelated, 'Spanish Grand Prix', keywords))
+        self.assertTrue(OfficialSourceDiscovery._is_relevant(relevant, 'Spanish Grand Prix', keywords, 2026))
+        self.assertFalse(OfficialSourceDiscovery._is_relevant(unrelated, 'Spanish Grand Prix', keywords, 2026))
 
 
 if __name__ == '__main__':

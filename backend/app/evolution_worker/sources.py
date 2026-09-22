@@ -313,10 +313,10 @@ class OfficialSourceDiscovery:
                 if word not in {'grand', 'prix', 'race', 'formula'}}
 
     @staticmethod
-    def _is_relevant(document: SourceDocument, race_name: str, keywords: set[str]) -> bool:
+    def _is_relevant(document: SourceDocument, race_name: str, keywords: set[str], season: int) -> bool:
         text = f'{document.title}\n{document.cleaned_text}'.casefold()
         name = ' '.join(race_name.casefold().split())
-        return name in text or sum(word in text for word in keywords) >= 2
+        return str(season) in text and (name in text or sum(word in text for word in keywords) >= 2)
 
     async def _page_links(self, url: str, client: httpx.AsyncClient) -> list[tuple[str, str]]:
         current, _, source_type = validate_public_url(url, self.resolver)
@@ -378,8 +378,9 @@ class OfficialSourceDiscovery:
                             continue
             selected = list(dict.fromkeys(candidates))[:self.max_candidates]
             documents = await TrustedUrlProvider(client, self.resolver).collect(race_id, selected)
+            season = int(race_id.split('-', 1)[0])
             return [str(item.url) for item in documents.documents
-                    if self._is_relevant(item, race_name, keywords)]
+                    if self._is_relevant(item, race_name, keywords, season)]
         finally:
             if owns_client:
                 await client.aclose()
