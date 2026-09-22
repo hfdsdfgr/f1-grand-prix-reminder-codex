@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'presentation.dart';
+
 import '../core/language.dart';
 import '../data/race_repository.dart';
 
@@ -45,33 +47,14 @@ class _RaceFeedViewState extends State<RaceFeedView> {
     future: _future,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) {
-        return Padding(
-          padding: const EdgeInsets.all(48),
-          child: Center(
-            child: CircularProgressIndicator(
-              semanticsLabel: tr(context, 'Loading races'),
-            ),
-          ),
-        );
+        return ContentState(tr(context, 'Loading races'), loading: true);
       }
       if (snapshot.hasData) _last = snapshot.data;
       if (snapshot.hasError && _last == null) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              tr(context, 'Unable to load races'),
-              style: const TextStyle(fontSize: 24),
-            ),
-            const SizedBox(height: 16),
-            Text(tr(context, 'Check your connection and try again.')),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _retry,
-              icon: const Icon(Icons.refresh),
-              label: Text(tr(context, 'Retry')),
-            ),
-          ],
+        return ContentState(
+          tr(context, 'Unable to load races'),
+          detail: tr(context, 'Check your connection and try again.'),
+          onRetry: _retry,
         );
       }
       final feed = _last!;
@@ -79,15 +62,11 @@ class _RaceFeedViewState extends State<RaceFeedView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (snapshot.hasError || feed.stale)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Text(
-                tr(context, 'Showing saved schedule. Times may have changed.'),
-                style: TextStyle(color: Theme.of(context).colorScheme.primary),
-              ),
+            ContentState(
+              tr(context, 'Showing saved schedule. Times may have changed.'),
             ),
           if (feed.races.isEmpty)
-            Text(
+            ContentState(
               tr(
                 context,
                 'No published races yet. Check back for the next schedule.',

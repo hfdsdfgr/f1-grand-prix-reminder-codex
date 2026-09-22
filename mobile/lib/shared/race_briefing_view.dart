@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme.dart';
+import 'presentation.dart';
+
 import '../core/language.dart';
 import '../data/follow_service.dart';
 import '../data/race_repository.dart';
@@ -53,21 +56,15 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
       final briefing = snapshot.data ?? _saved;
       if (snapshot.connectionState == ConnectionState.waiting &&
           briefing == null) {
-        return Center(
-          child: CircularProgressIndicator(
-            semanticsLabel: tr(context, 'Loading race briefing'),
-          ),
+        return ContentState(
+          tr(context, 'Loading race briefing'),
+          loading: true,
         );
       }
       if (briefing == null) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              tr(context, 'Unable to load race briefing. Please try again.'),
-            ),
-            TextButton(onPressed: _retry, child: Text(tr(context, 'Retry'))),
-          ],
+        return ContentState(
+          tr(context, 'Unable to load race briefing. Please try again.'),
+          onRetry: _retry,
         );
       }
       if (widget.spoilerHidden) {
@@ -77,10 +74,7 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (widget.showTitle) ...[
-            Text(
-              tr(context, 'Briefing'),
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
+            SectionHeading(tr(context, 'Briefing')),
             const SizedBox(height: 8),
           ],
           Text(
@@ -93,13 +87,13 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
           if (briefing.stale || snapshot.hasError)
             Padding(
               padding: const EdgeInsets.only(top: 12),
-              child: Text(
+              child: ContentState(
                 tr(context, 'Showing saved briefing. It may have changed.'),
               ),
             ),
           const SizedBox(height: 12),
           if (briefing.insights.isEmpty)
-            Text(
+            ContentState(
               tr(context, 'No verified briefing is available for this race.'),
             ),
           AnimatedBuilder(
@@ -124,15 +118,9 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
             for (final source in briefing.sources)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (source.provider != null) Text(source.provider!),
-                    SelectableText(
-                      source.url,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                child: SourceReference(
+                  publisher: source.provider,
+                  url: source.url,
                 ),
               ),
           ],
@@ -164,7 +152,7 @@ class _Insight extends StatelessWidget {
     label: '${tr(context, insight.topic)}. ${insight.detail}',
     child: ExcludeSemantics(
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(vertical: RaceSpace.large),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -172,18 +160,18 @@ class _Insight extends StatelessWidget {
               tr(context, insight.topic),
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 4),
-            Text(insight.detail),
+            const SizedBox(height: RaceSpace.small),
+            Text(insight.detail, style: Theme.of(context).textTheme.bodyLarge),
             for (final source in insight.sources)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  source.provider == null
-                      ? source.url
-                      : '${source.provider} · ${source.url}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                child: SourceReference(
+                  publisher: source.provider,
+                  url: source.url,
                 ),
               ),
+            const SizedBox(height: RaceSpace.large),
+            const Divider(),
           ],
         ),
       ),
@@ -199,10 +187,7 @@ class _BriefingSpoilerGate extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        tr(context, 'Briefing hidden'),
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
+      SectionHeading(tr(context, 'Briefing hidden')),
       const SizedBox(height: 8),
       Text(tr(context, 'Results hidden')),
       const SizedBox(height: 16),

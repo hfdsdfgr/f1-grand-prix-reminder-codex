@@ -116,6 +116,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: raceTheme(Brightness.light),
     darkTheme: raceTheme(Brightness.dark),
+    themeMode: ThemeMode.dark,
     home: Scaffold(
       appBar: AppBar(
         actions: [
@@ -151,19 +152,16 @@ class _GrandPrixAppState extends State<GrandPrixApp>
             ],
           ),
         ],
-        title: const Text(
-          'GrandPrixReminder',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
+        title: const Text('GrandPrixReminder'),
       ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
+            constraints: const BoxConstraints(maxWidth: RaceSpace.contentWidth),
             child: SingleChildScrollView(
               key: ValueKey(_index),
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+              padding: RaceSpace.page,
               child: switch (_index) {
                 0 => HomePage(
                   repository: _repository,

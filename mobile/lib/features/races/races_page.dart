@@ -46,10 +46,7 @@ class _RacesPageState extends State<RacesPage> {
         future: _seasons,
         builder: (context, snapshot) => DropdownButtonFormField<int>(
           initialValue: _season,
-          decoration: InputDecoration(
-            labelText: tr(context, 'Season'),
-            border: const OutlineInputBorder(),
-          ),
+          decoration: InputDecoration(labelText: tr(context, 'Season')),
           items: [
             for (final year in snapshot.data ?? [_season])
               DropdownMenuItem(value: year, child: Text('$year')),
@@ -106,7 +103,25 @@ class _RacesPageState extends State<RacesPage> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
-                      Text(tr(context, race.circuit)),
+                      Text(
+                        tr(
+                          context,
+                          race.lifecyclePhase == 'race_weekend'
+                              ? 'Race weekend'
+                              : race.status == 'completed'
+                              ? 'Race completed'
+                              : 'Pre-race',
+                        ),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: race.lifecyclePhase == 'race_weekend'
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        tr(context, race.circuit),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                       Text(
                         race.startsAt == null
                             ? '${race.date} · ${tr(context, 'Time to be confirmed')}'

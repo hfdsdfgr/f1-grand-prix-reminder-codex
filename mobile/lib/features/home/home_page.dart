@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/language.dart';
+import '../../shared/presentation.dart';
 import '../../core/spoilers.dart';
 import '../../data/race_repository.dart';
 import '../../data/follow_service.dart';
@@ -54,11 +55,6 @@ class HomePage extends StatelessWidget {
           Text(
             tr(context, race.circuit),
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          FollowContext(
-            repository: repository,
-            season: race.season,
-            follows: follows,
           ),
           const SizedBox(height: 32),
           if (race.lifecyclePhase == 'race_weekend') ...[
@@ -135,14 +131,13 @@ class HomePage extends StatelessWidget {
             stale: feed.stale,
             syncReminders: syncReminders,
           ),
-          const SizedBox(height: 40),
-          const Divider(),
-          const SizedBox(height: 32),
-          Text(
-            tr(context, 'Race weekend'),
-            style: theme.textTheme.headlineSmall,
+          FollowContext(
+            repository: repository,
+            season: race.season,
+            follows: follows,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 40),
+          SectionHeading(tr(context, 'Race weekend')),
           for (final session in race.sessions)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),

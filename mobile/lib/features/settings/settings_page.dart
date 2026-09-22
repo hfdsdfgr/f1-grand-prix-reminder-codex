@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
+import '../../shared/presentation.dart';
+
 import '../../core/language.dart';
 import '../../data/follow_service.dart';
 
@@ -28,9 +31,9 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
+          constraints: const BoxConstraints(maxWidth: RaceSpace.contentWidth),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+            padding: RaceSpace.page,
             children: [
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -72,10 +75,7 @@ class _FollowSettings extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        tr(context, 'Following'),
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
+      SectionHeading(tr(context, 'Following')),
       const SizedBox(height: 8),
       Text(tr(context, 'Choose drivers and teams from race results.')),
       const SizedBox(height: 24),

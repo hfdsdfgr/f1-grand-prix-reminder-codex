@@ -137,6 +137,7 @@ void main() {
   });
 
   for (final size in [
+    const Size(320, 720),
     const Size(375, 812),
     const Size(812, 375),
     const Size(1024, 768),

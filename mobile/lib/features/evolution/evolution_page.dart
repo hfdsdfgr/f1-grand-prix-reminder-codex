@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/presentation.dart';
+
 import '../../core/language.dart';
 import '../../data/follow_service.dart';
 import '../../data/race_repository.dart';
@@ -112,19 +114,12 @@ class _EvolutionPageState extends State<EvolutionPage> {
         future: _request,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-              child: CircularProgressIndicator(
-                semanticsLabel: tr(context, 'Loading upgrades'),
-              ),
-            );
+            return ContentState(tr(context, 'Loading upgrades'), loading: true);
           }
           if (!snapshot.hasData || snapshot.hasError) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tr(context, 'Unable to load upgrades. Please retry.')),
-                TextButton(onPressed: _load, child: Text(tr(context, 'Retry'))),
-              ],
+            return ContentState(
+              tr(context, 'Unable to load upgrades. Please retry.'),
+              onRetry: _load,
             );
           }
           final feed = snapshot.data!;
@@ -160,9 +155,11 @@ class _EvolutionPageState extends State<EvolutionPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (feed.stale)
-          Text(tr(context, 'Showing saved upgrades. They may have changed.')),
+          ContentState(
+            tr(context, 'Showing saved upgrades. They may have changed.'),
+          ),
         if (feed.upgrades.isEmpty)
-          Text(
+          ContentState(
             tr(context, 'No sourced upgrades are available for this season.'),
           ),
         if (feed.upgrades.isNotEmpty && widget.raceId == null) ...[
@@ -190,10 +187,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
           const SizedBox(height: 16),
         ],
         if (feed.timeline.isNotEmpty || feed.upgrades.isNotEmpty) ...[
-          Text(
-            tr(context, 'Season Evolution'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          SectionHeading(tr(context, 'Season Evolution')),
           const SizedBox(height: 16),
           if (widget.raceId == null && feed.timeline.isNotEmpty)
             Wrap(
@@ -401,8 +395,10 @@ class _UpgradeDetails extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(source.provider ?? ''),
-                    SelectableText(source.url),
+                    SourceReference(
+                      publisher: source.provider,
+                      url: source.url,
+                    ),
                     if (source.publishedAt != null)
                       Text(
                         MaterialLocalizations.of(context)

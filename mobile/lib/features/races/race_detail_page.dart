@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../../core/theme.dart';
+import '../../shared/presentation.dart';
+
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/language.dart';
@@ -94,9 +98,9 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
+            constraints: const BoxConstraints(maxWidth: RaceSpace.contentWidth),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+              padding: RaceSpace.page,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -218,24 +222,14 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
         future: _load(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-              child: CircularProgressIndicator(
-                semanticsLabel: tr(context, 'Loading results'),
-              ),
-            );
+            return ContentState(tr(context, 'Loading results'), loading: true);
           }
           if (snapshot.hasData) _saved[_qualifying] = snapshot.data!;
           final feed = _saved[_qualifying];
           if (feed == null) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tr(context, 'Unable to load results. Please try again.')),
-                TextButton(
-                  onPressed: _refresh,
-                  child: Text(tr(context, 'Retry')),
-                ),
-              ],
+            return ContentState(
+              tr(context, 'Unable to load results. Please try again.'),
+              onRetry: _refresh,
             );
           }
           return Column(
@@ -374,7 +368,7 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                         appBar: AppBar(title: Text(tr(context, 'Evolution'))),
                         body: SafeArea(
                           child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                            padding: RaceSpace.page,
                             child: EvolutionPage(
                               repository: widget.repository,
                               raceId: widget.race.id,
@@ -427,28 +421,18 @@ class _RaceStory extends StatelessWidget {
       final story = snapshot.data ?? saved;
       if (snapshot.connectionState == ConnectionState.waiting &&
           story == null) {
-        return Center(
-          child: CircularProgressIndicator(
-            semanticsLabel: tr(context, 'Loading race story'),
-          ),
-        );
+        return ContentState(tr(context, 'Loading race story'), loading: true);
       }
       if (story == null) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(tr(context, 'Unable to load race story. Please try again.')),
-            TextButton(onPressed: onRetry, child: Text(tr(context, 'Retry'))),
-          ],
+        return ContentState(
+          tr(context, 'Unable to load race story. Please try again.'),
+          onRetry: onRetry,
         );
       }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            tr(context, 'Race story'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          SectionHeading(tr(context, 'Race story')),
           const SizedBox(height: 8),
           Text(
             tr(context, 'Key race facts'),
@@ -457,7 +441,7 @@ class _RaceStory extends StatelessWidget {
           if (story.stale || snapshot.hasError)
             Padding(
               padding: const EdgeInsets.only(top: 12),
-              child: Text(
+              child: ContentState(
                 tr(context, 'Showing saved race story. It may have changed.'),
               ),
             ),
@@ -536,28 +520,18 @@ class _RaceStrategy extends StatelessWidget {
       final strategy = snapshot.data ?? saved;
       if (snapshot.connectionState == ConnectionState.waiting &&
           strategy == null) {
-        return Center(
-          child: CircularProgressIndicator(
-            semanticsLabel: tr(context, 'Loading strategy'),
-          ),
-        );
+        return ContentState(tr(context, 'Loading strategy'), loading: true);
       }
       if (strategy == null) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(tr(context, 'Unable to load strategy. Please try again.')),
-            TextButton(onPressed: onRetry, child: Text(tr(context, 'Retry'))),
-          ],
+        return ContentState(
+          tr(context, 'Unable to load strategy. Please try again.'),
+          onRetry: onRetry,
         );
       }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            tr(context, 'Strategy view'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          SectionHeading(tr(context, 'Strategy view')),
           const SizedBox(height: 8),
           Text(
             tr(context, 'Tyre compounds and verified pit laps.'),
@@ -566,7 +540,7 @@ class _RaceStrategy extends StatelessWidget {
           if (strategy.stale || snapshot.hasError)
             Padding(
               padding: const EdgeInsets.only(top: 12),
-              child: Text(
+              child: ContentState(
                 tr(context, 'Showing saved strategy. It may have changed.'),
               ),
             ),
@@ -656,10 +630,9 @@ class _ChampionshipImpact extends StatelessWidget {
       final impact = snapshot.data ?? saved;
       if (snapshot.connectionState == ConnectionState.waiting &&
           impact == null) {
-        return Center(
-          child: CircularProgressIndicator(
-            semanticsLabel: tr(context, 'Loading championship impact'),
-          ),
+        return ContentState(
+          tr(context, 'Loading championship impact'),
+          loading: true,
         );
       }
       if (impact == null) {
@@ -679,10 +652,7 @@ class _ChampionshipImpact extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            tr(context, 'Championship impact'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          SectionHeading(tr(context, 'Championship impact')),
           const SizedBox(height: 8),
           Text(
             tr(
@@ -875,10 +845,7 @@ class _SpoilerGate extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        tr(context, 'Race completed'),
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
+      SectionHeading(tr(context, 'Race completed')),
       const SizedBox(height: 8),
       Text(tr(context, 'Results hidden')),
       const SizedBox(height: 16),
@@ -904,10 +871,7 @@ class _WeekendSection extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        tr(context, 'Weekend hub'),
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
+      SectionHeading(tr(context, 'Weekend hub')),
       const SizedBox(height: 20),
       if (race.currentSession case final current?) ...[
         Text(
@@ -952,10 +916,7 @@ class _WeekendSection extends StatelessWidget {
       ),
       const Divider(),
       const SizedBox(height: 24),
-      Text(
-        tr(context, 'Weekend schedule'),
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
+      SectionHeading(tr(context, 'Weekend schedule')),
       const SizedBox(height: 12),
       for (final session in race.sessions) _SessionRow(session: session),
     ],

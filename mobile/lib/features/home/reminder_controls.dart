@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/language.dart';
+import '../../core/theme.dart';
 import '../../data/race_repository.dart';
 import '../../data/reminder_service.dart';
 import '../../shared/race_feed_view.dart';
@@ -194,10 +195,10 @@ class _ReminderSheetState extends State<ReminderSheet> {
         : widget.service?.saved(widget.race.id, _sessions[_session].kind);
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
-        24,
-        24,
-        24,
-        24 + MediaQuery.viewInsetsOf(context).bottom,
+        RaceSpace.large,
+        RaceSpace.large,
+        RaceSpace.large,
+        RaceSpace.large + MediaQuery.viewInsetsOf(context).bottom,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -288,6 +289,7 @@ class _ReminderSheetState extends State<ReminderSheet> {
             DropdownButtonFormField<int>(
               key: ValueKey('$_session-$_preset'),
               initialValue: _preset,
+              isExpanded: true,
               decoration: InputDecoration(labelText: tr(context, 'Remind me')),
               items: [
                 DropdownMenuItem(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/presentation.dart';
+
 import '../../core/language.dart';
 import '../../core/spoilers.dart';
 import '../../data/follow_service.dart';
@@ -44,21 +46,15 @@ class _BriefingPageState extends State<BriefingPage> {
     future: _request,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) {
-        return Center(
-          child: CircularProgressIndicator(
-            semanticsLabel: tr(context, 'Loading race briefing'),
-          ),
+        return ContentState(
+          tr(context, 'Loading race briefing'),
+          loading: true,
         );
       }
       if (snapshot.hasError || !snapshot.hasData) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              tr(context, 'Unable to load race briefing. Please try again.'),
-            ),
-            TextButton(onPressed: _retry, child: Text(tr(context, 'Retry'))),
-          ],
+        return ContentState(
+          tr(context, 'Unable to load race briefing. Please try again.'),
+          onRetry: _retry,
         );
       }
       final completed = snapshot.data!.races
@@ -78,11 +74,14 @@ class _BriefingPageState extends State<BriefingPage> {
           ),
           const SizedBox(height: 12),
           if (race == null)
-            Text(tr(context, 'No completed race is available for briefing.'))
+            ContentState(
+              tr(context, 'No completed race is available for briefing.'),
+            )
           else ...[
             if (completed.length > 1) ...[
               DropdownButtonFormField<String>(
                 initialValue: race.id,
+                isExpanded: true,
                 decoration: InputDecoration(
                   labelText: tr(context, 'Grand Prix'),
                 ),
