@@ -129,6 +129,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Two verified generation geometries are required.';
 
   @override
+  String get s_fad9c2603cf6 =>
+      'Overlay the previous race specification over the current car.';
+
+  @override
+  String get s_1ff8edb12dec => 'Two sourced race specifications are required.';
+
+  @override
   String get s_becccecd09bf =>
       'No sourced component differences are available.';
 

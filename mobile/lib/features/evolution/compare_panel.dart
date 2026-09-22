@@ -22,13 +22,16 @@ class EvolutionComparePanel extends StatelessWidget {
     required this.previous,
     required this.current,
     required this.changes,
-    required this.geometryAvailable,
+    required this.ghostAvailable,
+    required this.ghostEnabled,
+    required this.onGhostChanged,
     required this.onComponentSelected,
   });
 
   final String previous, current;
   final List<CompareChange> changes;
-  final bool geometryAvailable;
+  final bool ghostAvailable, ghostEnabled;
+  final ValueChanged<bool> onGhostChanged;
   final ValueChanged<String> onComponentSelected;
 
   @override
@@ -53,15 +56,12 @@ class EvolutionComparePanel extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         title: Text(tr(context, 'Ghost Compare')),
         subtitle: Text(
-          tr(
-            context,
-            geometryAvailable
-                ? 'Overlay the previous geometry over the current car.'
-                : 'Two verified generation geometries are required.',
-          ),
+          tr(context, ghostAvailable
+              ? 'Overlay the previous race specification over the current car.'
+              : 'Two sourced race specifications are required.'),
         ),
-        value: false,
-        onChanged: geometryAvailable ? (_) {} : null,
+        value: ghostEnabled,
+        onChanged: ghostAvailable ? onGhostChanged : null,
       ),
       if (changes.isEmpty)
         Text(

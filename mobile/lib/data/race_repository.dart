@@ -264,7 +264,9 @@ class UpgradeEntry {
       team = json['team'] as String,
       component = json['component'] as String,
       title = json['title'] as String,
-      status = json['status'] as String,
+      status = evolutionLifecycleStatuses.contains(json['status'])
+          ? json['status'] as String
+          : 'unknown',
       confidence = json['confidence'] as String,
       raceId = json['race_id'] as String?,
       race = json['race'] as String?,
@@ -277,6 +279,11 @@ class UpgradeEntry {
           .map((s) => BriefingSource(s as Map<String, dynamic>))
           .toList();
 }
+
+const evolutionLifecycleStatuses = {
+  'introduced', 'tested', 'retained', 'modified', 'removed',
+  'reintroduced', 'superseded', 'unknown',
+};
 
 class EvolutionTimelineEvent {
   final String raceId, race;

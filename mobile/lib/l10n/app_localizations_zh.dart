@@ -124,6 +124,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get s_c0edf949676b => '需要两份经过核验的代际几何模型。';
 
   @override
+  String get s_fad9c2603cf6 => '将上一站的赛车规格以重影叠加到当前赛车。';
+
+  @override
+  String get s_1ff8edb12dec => '需要两份有来源的分站赛车规格。';
+
+  @override
   String get s_becccecd09bf => '暂无有来源的部件差异。';
 
   @override
@@ -1045,6 +1051,12 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get s_c0edf949676b => '需要两份经过核验的代际几何模型。';
+
+  @override
+  String get s_fad9c2603cf6 => '将上一站的赛车规格以重影叠加到当前赛车。';
+
+  @override
+  String get s_1ff8edb12dec => '需要两份有来源的分站赛车规格。';
 
   @override
   String get s_becccecd09bf => '暂无有来源的部件差异。';

@@ -60,6 +60,9 @@ const chineseTranslations = {
   'Ghost Compare': '重影对比',
   'Overlay the previous geometry over the current car.': '将之前的几何半透明叠加到当前赛车。',
   'Two verified generation geometries are required.': '需要两份经过核验的代际几何模型。',
+  'Overlay the previous race specification over the current car.':
+      '将上一站的赛车规格以重影叠加到当前赛车。',
+  'Two sourced race specifications are required.': '需要两份有来源的分站赛车规格。',
   'No sourced component differences are available.': '暂无有来源的部件差异。',
   'Heritage': '车型传承',
   'Generation Compare': '代际对比',

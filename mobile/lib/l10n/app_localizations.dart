@@ -327,6 +327,18 @@ abstract class AppLocalizations {
   /// **'Two verified generation geometries are required.'**
   String get s_c0edf949676b;
 
+  /// No description provided for @s_fad9c2603cf6.
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay the previous race specification over the current car.'**
+  String get s_fad9c2603cf6;
+
+  /// No description provided for @s_1ff8edb12dec.
+  ///
+  /// In en, this message translates to:
+  /// **'Two sourced race specifications are required.'**
+  String get s_1ff8edb12dec;
+
   /// No description provided for @s_becccecd09bf.
   ///
   /// In en, this message translates to:

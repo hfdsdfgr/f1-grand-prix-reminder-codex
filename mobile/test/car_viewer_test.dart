@@ -25,6 +25,7 @@ Future<void> showCar(
   double height = 1000,
   double scale = 1,
   Brightness brightness = Brightness.light,
+  ValueChanged<String>? onComponentSelected,
 }) async {
   t.view.devicePixelRatio = 1;
   t.view.physicalSize = Size(width, height);
@@ -50,7 +51,11 @@ Future<void> showCar(
               child: SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: CarViewer(key: UniqueKey(), enableGltf: false),
+                  child: CarViewer(
+                    key: UniqueKey(),
+                    enableGltf: false,
+                    onComponentSelected: onComponentSelected,
+                  ),
                 ),
               ),
             ),
@@ -223,6 +228,25 @@ void main() {
     await t.pump();
     expect(painter(t).technical, isTrue);
     expect(t.takeException(), isNull);
+  });
+
+  testWidgets('component selection reports stable IDs to the product page', (
+    tester,
+  ) async {
+    String? selected;
+    await showCar(tester, onComponentSelected: (value) => selected = value);
+    final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first);
+    await tester.drag(canvas, const Offset(0, -160));
+    await tester.pumpAndSettle();
+    expect(scroll.position.pixels, greaterThan(0));
+    final componentPicker = find.byType(DropdownButtonFormField<String>).last;
+    await tester.ensureVisible(componentPicker);
+    await tester.tap(componentPicker);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Floor').last);
+    await tester.pumpAndSettle();
+    expect(selected, 'floor');
+    expect(painter(tester).selected, 'floor');
   });
 
   testWidgets('archive links are gated and browser errors stay in the app', (

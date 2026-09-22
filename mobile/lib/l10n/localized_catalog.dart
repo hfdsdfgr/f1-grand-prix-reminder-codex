@@ -40,6 +40,8 @@ String localizedText(BuildContext context, String text) {
     'Ghost Compare' => strings.s_166989cc6333,
     'Overlay the previous geometry over the current car.' => strings.s_0e0447a5124f,
     'Two verified generation geometries are required.' => strings.s_c0edf949676b,
+    'Overlay the previous race specification over the current car.' => strings.s_fad9c2603cf6,
+    'Two sourced race specifications are required.' => strings.s_1ff8edb12dec,
     'No sourced component differences are available.' => strings.s_becccecd09bf,
     'Heritage' => strings.s_70734c104e83,
     'Generation Compare' => strings.s_5f75233b080d,

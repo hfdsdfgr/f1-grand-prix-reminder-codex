@@ -44,6 +44,28 @@ void main() {
                 ],
               },
               {
+                'id': 'spanish-floor',
+                'team_id': 'cadillac',
+                'team': 'Cadillac',
+                'component_id': 'floor',
+                'component': 'Floor',
+                'title': 'Floor update',
+                'status': 'modified',
+                'confidence': 'high',
+                'race_id': '2026-3',
+                'race': 'Spanish Grand Prix',
+                'round': 3,
+                'change': 'Revised floor edge',
+                'goal': null,
+                'expected_effect': null,
+                'sources': [
+                  {
+                    'provider': 'Formula1.com',
+                    'url': 'https://www.formula1.com/test',
+                  },
+                ],
+              },
+              {
                 'id': 'unmapped',
                 'team_id': 't',
                 'team': 'Test Team',
@@ -78,6 +100,12 @@ void main() {
                 'race': 'Next Grand Prix',
                 'round': 2,
                 'upgrade_ids': ['unmapped'],
+              },
+              {
+                'race_id': '2026-3',
+                'race': 'Spanish Grand Prix',
+                'round': 3,
+                'upgrade_ids': ['spanish-floor'],
               },
             ],
             'stale': true,
@@ -159,6 +187,38 @@ void main() {
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();
     expect(find.text('https://example.com/test'), findsOneWidget);
+    final spanish = find.byKey(const ValueKey('evolution-2026-3'));
+    await tester.ensureVisible(spanish);
+    await tester.tap(spanish);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(compare);
+    await tester.tap(compare);
+    await tester.pumpAndSettle();
+    final ghost = find.byKey(const ValueKey('ghost-compare'));
+    expect(tester.widget<SwitchListTile>(ghost).onChanged, isNotNull);
+    await tester.ensureVisible(ghost);
+    await tester.tap(ghost);
+    await tester.pumpAndSettle();
+    expect((tester.widget<CustomPaint>(find.byKey(
+      const ValueKey('car-canvas'))).painter! as CarPainter).ghostCompare, isTrue);
+    expect(find.textContaining('modified'), findsWidgets);
     expect(tester.takeException(), isNull);
+  });
+
+  test('all lifecycle values remain stable and unknown values are conservative', () {
+    for (final status in evolutionLifecycleStatuses) {
+      final entry = UpgradeEntry({
+        'id': status, 'team_id': 't', 'team': 'Team',
+        'component_id': 'floor', 'component': 'Floor', 'title': 'Update',
+        'status': status, 'confidence': 'high', 'sources': <dynamic>[],
+      });
+      expect(entry.status, status);
+    }
+    final unknown = UpgradeEntry({
+      'id': 'x', 'team_id': 't', 'team': 'Team',
+      'component_id': 'floor', 'component': 'Floor', 'title': 'Update',
+      'status': 'invented', 'confidence': 'high', 'sources': <dynamic>[],
+    });
+    expect(unknown.status, 'unknown');
   });
 }

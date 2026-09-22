@@ -31,7 +31,9 @@ class _EvolutionPageState extends State<EvolutionPage> {
   String? _team, _race;
   String? _selectedUpgrade, _highlightedComponent, _highlightedTeam;
   bool _compareSpecification = false;
+  bool _ghostCompare = false;
   String? _language;
+  EvolutionFeed? _loadedFeed;
   late Future<EvolutionFeed> _request = _fetch();
 
   Future<EvolutionFeed> _fetch() => widget.raceId == null
@@ -61,6 +63,45 @@ class _EvolutionPageState extends State<EvolutionPage> {
     _highlightedComponent = null;
   }
 
+  void _clearCompare() {
+    _compareSpecification = false;
+    _ghostCompare = false;
+  }
+
+  void _openComponent(String componentId) {
+    final race = widget.raceId ?? _race;
+    final entries = _loadedFeed?.upgrades.where((entry) =>
+        entry.componentId == componentId &&
+        (_team == null || entry.teamId == _team) &&
+        (race == null || entry.raceId == race)).toList() ?? <UpgradeEntry>[];
+    setState(() {
+      _highlightedComponent = componentId;
+      _selectedUpgrade = entries.firstOrNull?.id;
+    });
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.all(24),
+          children: [
+            Text(tr(context, 'Upgrade timeline'),
+                style: Theme.of(context).textTheme.titleLarge),
+            Text(componentId),
+            if (entries.isEmpty)
+              ContentState(tr(context, 'No recorded upgrade')),
+            for (final entry in entries)
+              _UpgradeDetails(entry: entry, selected: true, expanded: true,
+                mappedTo3d: true, onSelected: () => _selectUpgrade(entry)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,13 +113,16 @@ class _EvolutionPageState extends State<EvolutionPage> {
       const SizedBox(height: 12),
       Text(tr(context, 'Follow what changes on the cars.')),
       const SizedBox(height: 24),
-      if (widget.raceId == null) ...[
         CarViewer(
           enableGltf: widget.enableGltf,
           highlightedComponentId: _highlightedComponent,
           highlightedTeamId: _highlightedTeam,
+          onComponentSelected: _openComponent,
+          ghostCompare: _ghostCompare,
+          ghostComponentIds: _ghostComponents,
         ),
         const SizedBox(height: 32),
+      if (widget.raceId == null) ...[
         Row(
           children: [
             IconButton(
@@ -90,7 +134,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                       _race = null;
                       _highlightedTeam = null;
                       _clearSelection();
-                      _compareSpecification = false;
+                      _clearCompare();
                       _load();
                     }
                   : null,
@@ -111,7 +155,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                       _race = null;
                       _highlightedTeam = null;
                       _clearSelection();
-                      _compareSpecification = false;
+                      _clearCompare();
                       _load();
                     }
                   : null,
@@ -134,6 +178,17 @@ class _EvolutionPageState extends State<EvolutionPage> {
             );
           }
           final feed = snapshot.data!;
+          if (!identical(_loadedFeed, feed)) {
+            _loadedFeed = feed;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              if (widget.raceId != null &&
+                  _selectedUpgrade == null &&
+                  feed.upgrades.isNotEmpty) {
+                _selectUpgrade(feed.upgrades.first);
+              }
+            });
+          }
           return AnimatedBuilder(
             animation: widget.follows ?? _neverNotify,
             builder: (context, _) => _content(context, feed),
@@ -192,7 +247,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
               _race = null;
               _highlightedTeam = value;
               _clearSelection();
-              _compareSpecification = false;
+              _clearCompare();
             }),
           ),
           const SizedBox(height: 16),
@@ -211,7 +266,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                   onSelected: (_) => setState(() {
                     _race = null;
                     _clearSelection();
-                    _compareSpecification = false;
+                    _clearCompare();
                   }),
                 ),
                 for (final event in feed.timeline)
@@ -238,7 +293,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                           onSelected: (_) {
                             setState(() {
                               _race = event.raceId;
-                              _compareSpecification = false;
+                              _clearCompare();
                             });
                             if (hasUpgrade) {
                               _selectUpgrade(upgrades.first);
@@ -271,7 +326,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
               ],
               onChanged: (value) => setState(() {
                 _race = value;
-                _compareSpecification = false;
+                _clearCompare();
                 _clearSelection();
               }),
             ),
@@ -288,7 +343,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
             if (_compareSpecification) ...[
               const SizedBox(height: 16),
               EvolutionComparePanel(
-                previous: tr(context, 'Launch specification'),
+                previous: tr(context, _previousRace(feed, race)?.race ?? 'Launch specification'),
                 current: tr(context, entries.first.race ?? race),
                 changes: [
                   for (final entry in entries)
@@ -301,7 +356,10 @@ class _EvolutionPageState extends State<EvolutionPage> {
                       status: entry.status,
                     ),
                 ],
-                geometryAvailable: false,
+                ghostAvailable: _previousRace(feed, race) != null &&
+                    entries.any((entry) => carComponentIds.contains(entry.componentId)),
+                ghostEnabled: _ghostCompare,
+                onGhostChanged: (value) => setState(() => _ghostCompare = value),
                 onComponentSelected: (componentId) {
                   final match = entries.where(
                     (entry) => entry.componentId == componentId,
@@ -332,6 +390,23 @@ class _EvolutionPageState extends State<EvolutionPage> {
 
   int _teamScore(UpgradeEntry entry) =>
       widget.follows?.followsTeam(entry.teamId) == true ? 1 : 0;
+
+  EvolutionTimelineEvent? _previousRace(EvolutionFeed feed, String raceId) {
+    final current = feed.timeline.where((event) => event.raceId == raceId).firstOrNull;
+    if (current == null) return null;
+    return feed.timeline.where((event) => event.round < current.round).lastOrNull;
+  }
+
+  Set<String> get _ghostComponents {
+    if (!_ghostCompare || _loadedFeed == null) return const {};
+    final race = widget.raceId ?? _race;
+    if (race == null) return const {};
+    return _loadedFeed!.upgrades
+        .where((entry) => entry.raceId == race &&
+            carComponentIds.contains(entry.componentId))
+        .map((entry) => entry.componentId!)
+        .toSet();
+  }
 }
 
 final _neverNotify = _NeverNotify();
@@ -343,16 +418,19 @@ class _UpgradeDetails extends StatelessWidget {
   final bool selected;
   final bool mappedTo3d;
   final VoidCallback onSelected;
+  final bool expanded;
   const _UpgradeDetails({
     super.key,
     required this.entry,
     required this.selected,
     required this.mappedTo3d,
     required this.onSelected,
+    this.expanded = false,
   });
 
   @override
   Widget build(BuildContext context) => ExpansionTile(
+    initiallyExpanded: expanded,
     onExpansionChanged: (expanded) {
       if (expanded) onSelected();
     },

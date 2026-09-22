@@ -110,8 +110,8 @@ void main() {
           'briefing': RaceBriefingView(repository: repo, raceId: '2030-1'),
           'evolution': EvolutionPage(
             repository: repo,
-            raceId: '2030-1',
             enableGltf: false,
+            raceId: '2030-1',
           ),
           'reminder': ReminderSheet(race: Race(fixture()), stale: false),
           'settings': SettingsPage(
@@ -144,7 +144,22 @@ void main() {
               ),
             ),
           );
-          await t.pumpAndSettle();
+          if (entry.key == 'evolution') {
+            for (var i = 0;
+                i < 100 &&
+                    !t.any(find.byKey(const ValueKey('car-canvas')));
+                i++) {
+              await t.runAsync(() => Future<void>.delayed(
+                    const Duration(milliseconds: 10),
+                  ));
+              await t.pump();
+            }
+          }
+          if (entry.key == 'evolution') {
+            await t.pump(const Duration(milliseconds: 300));
+          } else {
+            await t.pumpAndSettle();
+          }
           expect(t.takeException(), isNull, reason: entry.key);
           if (entry.key == 'briefing') {
             expect(find.text('Driver feedback'), findsOneWidget);

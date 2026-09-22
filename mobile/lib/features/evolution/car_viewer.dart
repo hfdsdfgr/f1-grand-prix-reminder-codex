@@ -16,15 +16,22 @@ class CarViewer extends StatefulWidget {
     this.enableGltf = true,
     this.highlightedComponentId,
     this.highlightedTeamId,
+    this.onComponentSelected,
+    this.ghostCompare = false,
+    this.ghostComponentIds = const {},
   });
 
   final bool enableGltf;
   final String? highlightedComponentId, highlightedTeamId;
+  final ValueChanged<String>? onComponentSelected;
+  final bool ghostCompare;
+  final Set<String> ghostComponentIds;
   @override
   State<CarViewer> createState() => _CarViewerState();
 }
 
-class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
+class _CarViewerState extends State<CarViewer>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late Future<CarModel> _model = CarModel.load();
   final _focus = FocusNode();
   final _gltfController = GltfCarController();
@@ -35,6 +42,29 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
   bool _focusMode = false, _exploded = false, _technical = false;
   bool _compareMode = false;
   bool _gltfReady = false, _gltfUnavailable = false;
+  bool _resumed = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final component = widget.highlightedComponentId;
+    if (carComponentIds.contains(component)) _selected = component!;
+    _team = carTeamKey(widget.highlightedTeamId);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    setState(() {
+      _resumed = state == AppLifecycleState.resumed;
+      if (!_resumed) {
+        _gltfReady = false;
+        _focusAnimation.stop();
+        _explodeAnimation.stop();
+      }
+    });
+  }
   late final AnimationController _focusAnimation = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 180),
@@ -65,6 +95,7 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focusAnimation.dispose();
     _explodeAnimation.dispose();
     _focus.dispose();
@@ -94,6 +125,7 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
       _focusMode = true;
     });
     _animate(_focusAnimation, true);
+    widget.onComponentSelected?.call(componentId);
   }
 
   void _toggleExploded() {
@@ -296,10 +328,12 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                 chinese: zh,
                 textScaler: MediaQuery.textScalerOf(context),
                 labelStyle: Theme.of(context).textTheme.labelMedium,
-                renderModel: !_gltfReady || _wire,
+                renderModel: !_gltfReady || _wire || widget.ghostCompare,
                 focus: _focusAnimation.value,
                 exploded: _explodeAnimation.value,
                 technical: _technical,
+                ghostCompare: widget.ghostCompare,
+                ghostComponentIds: widget.ghostComponentIds,
               );
               return Semantics(
                 label: tr(context, 'Interactive car model'),
@@ -369,10 +403,13 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                       }),
                       onTapUp: (d) {
                         _focus.requestFocus();
-                        final hit = _gltfReady
+                        final hit = _gltfReady && !_wire
                             ? _gltfController.partAt(d.localPosition, size)
                             : painter.partAt(d.localPosition, size);
-                        if (hit != null) setState(() => _selected = hit);
+                        if (hit != null) {
+                          setState(() => _selected = hit);
+                          widget.onComponentSelected?.call(hit);
+                        }
                       },
                       child: RepaintBoundary(
                         child: SizedBox.fromSize(
@@ -381,8 +418,10 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                             fit: StackFit.expand,
                             children: [
                               if (widget.enableGltf &&
+                                  _resumed &&
                                   !_gltfUnavailable &&
-                                  !_wire)
+                                  !_wire &&
+                                  !widget.ghostCompare)
                                 GltfCarStage(
                                   model: model,
                                   controller: _gltfController,
@@ -534,10 +573,9 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
               previous: '${comparison['season']} / ${comparison['name']}',
               current: '${archive['season']} / ${archive['name']}',
               changes: changes,
-              geometryAvailable:
-                  comparison['base_3d_model_id'] != null &&
-                  archive['base_3d_model_id'] != null &&
-                  comparison['base_3d_model_id'] != archive['base_3d_model_id'],
+              ghostAvailable: false,
+              ghostEnabled: false,
+              onGhostChanged: (_) {},
               onComponentSelected: _focusPart,
             ),
             const SizedBox(height: 12),
@@ -554,7 +592,10 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                 DropdownMenuItem(value: c.id, child: Text(c.text(zh)[0])),
             ],
             onChanged: (value) {
-              if (value != null) setState(() => _selected = value);
+              if (value != null) {
+                setState(() => _selected = value);
+                widget.onComponentSelected?.call(value);
+              }
             },
           ),
           const SizedBox(height: 8),
@@ -657,6 +698,8 @@ class CarPainter extends CustomPainter {
   final bool labels, wire, chinese;
   final bool renderModel;
   final bool technical;
+  final bool ghostCompare;
+  final Set<String> ghostComponentIds;
   final double focus, exploded;
   final ColorScheme scheme;
   final TextScaler textScaler;
@@ -679,6 +722,8 @@ class CarPainter extends CustomPainter {
     required this.focus,
     required this.exploded,
     required this.technical,
+    this.ghostCompare = false,
+    this.ghostComponentIds = const {},
     this.renderModel = true,
   });
 
@@ -769,6 +814,21 @@ class CarPainter extends CustomPainter {
         );
       }
     }
+    if (ghostCompare && ghostComponentIds.isNotEmpty) {
+      canvas.save();
+      canvas.translate(-5, 3);
+      for (final face in _faces(size)) {
+        if (!ghostComponentIds.contains(face.part)) continue;
+        canvas.drawPath(
+          face.path,
+          Paint()
+            ..color = scheme.primary.withValues(alpha: .42)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.1,
+        );
+      }
+      canvas.restore();
+    }
     if (labels) _paintLabels(canvas, size);
     canvas.restore();
   }
@@ -858,6 +918,8 @@ class CarPainter extends CustomPainter {
       focus != old.focus ||
       exploded != old.exploded ||
       technical != old.technical ||
+      ghostCompare != old.ghostCompare ||
+      ghostComponentIds != old.ghostComponentIds ||
       chinese != old.chinese ||
       scheme != old.scheme ||
       textScaler != old.textScaler ||

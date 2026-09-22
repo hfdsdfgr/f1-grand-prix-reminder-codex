@@ -38,6 +38,8 @@
   "s_166989cc6333": "Ghost Compare",
   "s_0e0447a5124f": "Overlay the previous geometry over the current car.",
   "s_c0edf949676b": "Two verified generation geometries are required.",
+  "s_fad9c2603cf6": "Overlay the previous race specification over the current car.",
+  "s_1ff8edb12dec": "Two sourced race specifications are required.",
   "s_becccecd09bf": "No sourced component differences are available.",
   "s_70734c104e83": "Heritage",
   "s_5f75233b080d": "Generation Compare",
