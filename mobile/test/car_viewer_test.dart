@@ -26,6 +26,10 @@ Future<void> showCar(
   double scale = 1,
   Brightness brightness = Brightness.light,
   ValueChanged<String>? onComponentSelected,
+  bool showTeamSelector = true,
+  String? currentCarName,
+  int? currentCarSeason,
+  String? currentCarSourceUrl,
 }) async {
   t.view.devicePixelRatio = 1;
   t.view.physicalSize = Size(width, height);
@@ -55,6 +59,10 @@ Future<void> showCar(
                     key: UniqueKey(),
                     enableGltf: false,
                     onComponentSelected: onComponentSelected,
+                    showTeamSelector: showTeamSelector,
+                    currentCarName: currentCarName,
+                    currentCarSeason: currentCarSeason,
+                    currentCarSourceUrl: currentCarSourceUrl,
                   ),
                 ),
               ),
@@ -294,6 +302,24 @@ void main() {
     expect(find.text('Official Car'), findsNothing);
     expect(painter(t).team, 'mclaren');
     expect(t.takeException(), isNull);
+  });
+
+  testWidgets('product view names the official current-season chassis', (
+    t,
+  ) async {
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    await showCar(
+      t,
+      showTeamSelector: false,
+      currentCarName: 'MCL40',
+      currentCarSeason: 2026,
+      currentCarSourceUrl: 'https://www.formula1.com/en/teams/mclaren',
+    );
+
+    expect(find.text('2026 / MCL40'), findsOneWidget);
+    expect(find.text('Generic illustration'), findsNothing);
+    expect(find.text('Official Car'), findsOneWidget);
   });
 
   testWidgets('generation compare uses sourced changes and gates ghost view', (

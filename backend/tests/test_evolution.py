@@ -22,7 +22,8 @@ class EvolutionTests(unittest.TestCase):
                 season = db.execute('SELECT season_id FROM seasons').fetchone()[0]
                 race = db.execute('SELECT race_id FROM races').fetchone()[0]
                 db.execute("INSERT INTO teams(team_id,canonical_name,status,created_at,updated_at) VALUES ('t','Test','active','2026-01-01','2026-01-01')")
-                db.execute("INSERT INTO team_seasons(team_season_id,team_id,season_id,display_name) VALUES ('ts','t',?,'Test')", (season,))
+                db.execute("INSERT INTO team_seasons(team_season_id,team_id,season_id,display_name,car_name) VALUES ('ts','t',?,'Mercedes','W17')", (season,))
+                db.execute("INSERT INTO car_models(car_model_id,team_season_id,name,season_id) VALUES ('car_2026_mercedes','ts','W17',?)", (season,))
                 db.execute("INSERT INTO technical_eras(technical_era_id,name) VALUES ('era','Test')")
                 db.execute("INSERT INTO car_component_types(component_type_id,technical_era_id,canonical_name) VALUES ('floor','era','Floor')")
                 for uid in ('sourced', 'unsourced'):
@@ -42,6 +43,8 @@ class EvolutionTests(unittest.TestCase):
             self.assertEqual(feed.upgrades[0].component_id, 'floor')
             self.assertEqual(feed.timeline[0].race_id, '2026-1')
             self.assertEqual(feed.timeline[0].upgrade_ids, ['sourced'])
+            self.assertEqual(feed.cars[0].car_name, 'W17')
+            self.assertEqual(str(feed.cars[0].source_url), 'https://www.formula1.com/en/teams/mercedes')
             with closing(connect(path)) as db, db:
                 upsert_translation(db, 'upgrade', 'sourced', 'title', 'zh-CN', '已验证的底板升级', 'test')
             chinese = load_evolution(path, 2026, 'zh-CN')

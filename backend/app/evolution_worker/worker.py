@@ -12,6 +12,7 @@ from app.evolution_worker.sources import EvolutionSourceProvider, OfficialSource
 from app.evolution_worker.sources import publication_phase
 from app.evolution_worker.validator import validate_batch
 from app.evolution_worker.persistence import persist_validated
+from app.car_catalog import sync_car_catalog
 
 
 logger = logging.getLogger('evolution_worker')
@@ -128,6 +129,10 @@ async def execute_evolution(path: str, race_id: str, urls: list[str], *, dry_run
 
 async def execute_discovered_evolution(path: str, race_id: str) -> dict:
     """Production scheduler entry point; manual URL mode remains in execute_evolution."""
+    try:
+        await sync_car_catalog(path, int(race_id.split('-', 1)[0]))
+    except Exception as exc:
+        logger.warning('Official car catalog sync failed: %s', type(exc).__name__)
     context = race_context(path, race_id)
     urls = await OfficialSourceDiscovery().discover(race_id=race_id, **context)
     if not urls:
@@ -143,7 +148,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument('--season', type=int, required=True)
     result.add_argument('--round', dest='round_number', type=int, required=True)
     result.add_argument('--source-url', action='append', required=True,
-                        help='Trusted evidence URL; repeat for more sources (maximum 12)')
+                        help='Trusted evidence URL; repeat for more sources (maximum 24)')
     result.add_argument('--database', default=os.getenv('DATABASE_PATH', 'data/schedules.db'))
     result.add_argument('--dry-run', action='store_true')
     return result

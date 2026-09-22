@@ -15,7 +15,7 @@ import httpx
 from app.evolution_worker.llm import DeepSeekProvider
 from app.evolution_worker.models import ExtractionBatch, SourceDocument, UpgradeStatus
 from app.evolution_worker.sources import (
-    TrustedUrlProvider, canonical_url, clean_html, deduplicate, publication_phase,
+    OfficialSourceDiscovery, TrustedUrlProvider, canonical_url, clean_html, deduplicate, publication_phase,
     published_at_from_html, validate_public_url,
 )
 from app.evolution_worker.validator import validate_batch
@@ -69,6 +69,17 @@ def extraction(change='Revised floor geometry', quote='tested a revised floor ge
 
 
 class EvolutionSourceTests(unittest.IsolatedAsyncioTestCase):
+    def test_discovery_balances_candidates_across_official_hosts(self):
+        candidates = [
+            'https://www.formula1.com/one', 'https://www.formula1.com/two',
+            'https://www.mclaren.com/one', 'https://www.mclaren.com/two',
+            'https://www.ferrari.com/one',
+        ]
+        self.assertEqual(OfficialSourceDiscovery._balanced(candidates, 4), [
+            'https://www.formula1.com/one', 'https://www.mclaren.com/one',
+            'https://www.ferrari.com/one', 'https://www.formula1.com/two',
+        ])
+
     def test_json_ld_publication_time_drives_post_race_phase(self):
         published = published_at_from_html(
             '<script type="application/ld+json">{"datePublished":"2026-09-13T17:00:00.000Z"}</script>')

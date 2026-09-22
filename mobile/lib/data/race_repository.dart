@@ -281,8 +281,14 @@ class UpgradeEntry {
 }
 
 const evolutionLifecycleStatuses = {
-  'introduced', 'tested', 'retained', 'modified', 'removed',
-  'reintroduced', 'superseded', 'unknown',
+  'introduced',
+  'tested',
+  'retained',
+  'modified',
+  'removed',
+  'reintroduced',
+  'superseded',
+  'unknown',
 };
 
 class EvolutionTimelineEvent {
@@ -297,17 +303,33 @@ class EvolutionTimelineEvent {
 }
 
 class EvolutionFeed {
+  final List<EvolutionCarEntry> cars;
   final List<UpgradeEntry> upgrades;
   final List<EvolutionTimelineEvent> timeline;
   final bool stale;
   EvolutionFeed(Map<String, dynamic> json, {bool cached = false})
-    : upgrades = (json['upgrades'] as List)
+    : cars = (json['cars'] as List<dynamic>? ?? const [])
+          .map((car) => EvolutionCarEntry(car as Map<String, dynamic>))
+          .toList(),
+      upgrades = (json['upgrades'] as List)
           .map((u) => UpgradeEntry(u as Map<String, dynamic>))
           .toList(),
       timeline = (json['timeline'] as List<dynamic>? ?? const [])
           .map((event) => EvolutionTimelineEvent(event as Map<String, dynamic>))
           .toList(),
       stale = cached || (json['stale'] as bool? ?? false);
+}
+
+class EvolutionCarEntry {
+  final String teamId, team, carModelId, carName, sourceUrl;
+  final int season;
+  EvolutionCarEntry(Map<String, dynamic> json)
+    : teamId = json['team_id'] as String,
+      team = json['team'] as String,
+      carModelId = json['car_model_id'] as String,
+      carName = json['car_name'] as String,
+      season = json['season'] as int,
+      sourceUrl = json['source_url'] as String;
 }
 
 class SeasonRosterEntry {

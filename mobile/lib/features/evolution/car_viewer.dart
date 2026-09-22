@@ -18,6 +18,9 @@ class CarViewer extends StatefulWidget {
     this.highlightedTeamId,
     this.onComponentSelected,
     this.showTeamSelector = true,
+    this.currentCarName,
+    this.currentCarSeason,
+    this.currentCarSourceUrl,
     this.ghostCompare = false,
     this.ghostComponentIds = const {},
   });
@@ -26,6 +29,8 @@ class CarViewer extends StatefulWidget {
   final String? highlightedComponentId, highlightedTeamId;
   final ValueChanged<String>? onComponentSelected;
   final bool showTeamSelector;
+  final String? currentCarName, currentCarSourceUrl;
+  final int? currentCarSeason;
   final bool ghostCompare;
   final Set<String> ghostComponentIds;
   @override
@@ -263,48 +268,68 @@ class _CarViewerState extends State<CarViewer>
             ),
             const SizedBox(height: 12),
           ],
-          DropdownButtonFormField<String>(
-            key: ValueKey('archive-$_team-$_archive'),
-            initialValue: _archive,
-            isExpanded: true,
-            decoration: InputDecoration(labelText: tr(context, 'Car archive')),
-            items: [
-              DropdownMenuItem(
-                value: 'generic',
-                child: Text(tr(context, 'Generic illustration')),
+          if (!widget.showTeamSelector)
+            InputDecorator(
+              decoration: InputDecoration(
+                labelText: tr(context, 'Car archive'),
               ),
-              for (final car in archives)
+              child: Text(
+                widget.currentCarName == null
+                    ? tr(context, 'Not available')
+                    : '${widget.currentCarSeason} / ${widget.currentCarName}',
+              ),
+            )
+          else
+            DropdownButtonFormField<String>(
+              key: ValueKey('archive-$_team-$_archive'),
+              initialValue: _archive,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: tr(context, 'Car archive'),
+              ),
+              items: [
                 DropdownMenuItem(
-                  value: car['car_model_id'] as String,
-                  child: Text('${car['season']} / ${car['name']}'),
+                  value: 'generic',
+                  child: Text(tr(context, 'Generic illustration')),
                 ),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                final selected = archives.where(
-                  (car) => car['car_model_id'] == value,
-                );
-                setState(() {
-                  _archive = value;
-                  _compareArchive = selected.isEmpty
-                      ? null
-                      : selected.first['previous_car_model_id'] as String?;
-                  _compareMode = false;
-                });
-              }
-            },
-          ),
+                for (final car in archives)
+                  DropdownMenuItem(
+                    value: car['car_model_id'] as String,
+                    child: Text('${car['season']} / ${car['name']}'),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  final selected = archives.where(
+                    (car) => car['car_model_id'] == value,
+                  );
+                  setState(() {
+                    _archive = value;
+                    _compareArchive = selected.isEmpty
+                        ? null
+                        : selected.first['previous_car_model_id'] as String?;
+                    _compareMode = false;
+                  });
+                }
+              },
+            ),
           const SizedBox(height: 8),
           Text(
             tr(
               context,
-              archive == null
+              archive == null || !widget.showTeamSelector
                   ? 'Team-inspired colours only; not an official livery.'
                   : 'Identity verified; generation geometry unavailable. Showing the generic illustration.',
             ),
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          if (archive?['official_url'] != null)
+          if (!widget.showTeamSelector && widget.currentCarSourceUrl != null)
+            TextButton.icon(
+              onPressed: () => _official(widget.currentCarSourceUrl!),
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: Text(tr(context, 'Official Car')),
+            )
+          else if (archive?['official_url'] != null)
             TextButton.icon(
               onPressed: () => _official(archive!['official_url'] as String),
               icon: const Icon(Icons.open_in_new, size: 18),

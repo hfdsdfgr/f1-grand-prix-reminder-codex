@@ -236,6 +236,9 @@ class _EvolutionPageState extends State<EvolutionPage> {
     final entries = teamEntries
         .where((u) => race == null || u.raceId == race)
         .toList();
+    final currentCar = feed.cars
+        .where((car) => carTeamKey(car.teamId, car.team) == team)
+        .firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -269,6 +272,9 @@ class _EvolutionPageState extends State<EvolutionPage> {
             highlightedTeamId: team,
             onComponentSelected: _openComponent,
             showTeamSelector: false,
+            currentCarName: currentCar?.carName,
+            currentCarSeason: currentCar?.season,
+            currentCarSourceUrl: currentCar?.sourceUrl,
             ghostCompare: _ghostCompare,
             ghostComponentIds: _ghostComponents,
           ),

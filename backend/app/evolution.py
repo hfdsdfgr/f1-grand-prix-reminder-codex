@@ -3,9 +3,10 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, HttpUrl, ValidationError
+from pydantic import BaseModel, Field, HttpUrl, ValidationError
 
 from app.data_schema import connect
+from app.car_catalog import team_profile_url
 from app.localization import seed_canonical, text
 
 
@@ -40,8 +41,18 @@ class EvolutionTimelineEvent(BaseModel):
     upgrade_ids: list[str]
 
 
+class EvolutionCar(BaseModel):
+    team_id: str
+    team: str
+    car_model_id: str
+    car_name: str
+    season: int
+    source_url: HttpUrl
+
+
 class EvolutionFeed(BaseModel):
     season: int
+    cars: list[EvolutionCar] = Field(default_factory=list)
     upgrades: list[UpgradeRead]
     timeline: list[EvolutionTimelineEvent]
     updated_at: datetime
@@ -50,6 +61,7 @@ class EvolutionFeed(BaseModel):
 
 class EvolutionRaceDetail(BaseModel):
     race_id: str
+    cars: list[EvolutionCar] = Field(default_factory=list)
     upgrades: list[UpgradeRead]
 
 
@@ -82,6 +94,10 @@ def load_evolution(path: str, season: int, language: str = 'en') -> EvolutionFee
         race_rows = db.execute('''SELECT r.display_name AS race,r.round
             FROM races r JOIN seasons s ON s.season_id=r.season_id
             WHERE s.year=? AND r.round IS NOT NULL ORDER BY r.round''', (season,)).fetchall()
+        car_rows = db.execute('''SELECT t.team_id,ts.display_name AS team,cm.car_model_id,
+            cm.name AS car_name FROM car_models cm JOIN team_seasons ts USING(team_season_id)
+            JOIN teams t USING(team_id) JOIN seasons s ON s.season_id=cm.season_id
+            WHERE s.year=? AND cm.status='active' ORDER BY ts.display_name''', (season,)).fetchall()
     sources = {}
     for row in source_rows:
         try:
@@ -117,7 +133,11 @@ def load_evolution(path: str, season: int, language: str = 'en') -> EvolutionFee
         race_id=f"{season}-{row['round']}", race=row['race'], round=row['round'],
         upgrade_ids=upgrade_ids.get(f"{season}-{row['round']}", []),
     ) for row in race_rows]
-    return EvolutionFeed(season=season, upgrades=upgrades, timeline=timeline,
+    cars = [EvolutionCar(team_id=row['team_id'], team=row['team'],
+                         car_model_id=row['car_model_id'], car_name=row['car_name'], season=season,
+                         source_url=team_profile_url(row['team'])) for row in car_rows
+            if team_profile_url(row['team'])]
+    return EvolutionFeed(season=season, cars=cars, upgrades=upgrades, timeline=timeline,
                          updated_at=datetime.now(timezone.utc))
 
 
@@ -125,5 +145,6 @@ def load_race_evolution(path: str, race_id: str, language: str = 'en') -> Evolut
     season, _ = map(int, race_id.split('-'))
     feed = load_evolution(path, season, language)
     return EvolutionRaceDetail(
-        race_id=race_id, upgrades=[item for item in feed.upgrades if item.race_id == race_id],
+        race_id=race_id, cars=feed.cars,
+        upgrades=[item for item in feed.upgrades if item.race_id == race_id],
     )

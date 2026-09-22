@@ -40,10 +40,13 @@ TEAM_DOMAINS = {
     'mercedes': ('mercedesamgf1.com',), 'red_bull': ('redbullracing.com',),
     'alpine': ('alpinef1.com',), 'williams': ('williamsf1.com',),
     'haas': ('haasf1team.com',), 'cadillac': ('cadillacf1team.com',),
+    'aston_martin': ('astonmartinf1.com',), 'audi': ('audi.com',),
+    'racing_bulls': ('racingbulls.com',),
 }
 USER_AGENT = 'GrandPrixReminder-Evolution/0.1 (+evidence-only collector)'
 MAX_BODY_BYTES = 2_000_000
 MAX_DOCUMENT_CHARS = 40_000
+MAX_SOURCE_URLS = 24
 TRACKING_QUERY_KEYS = {'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref', 'source'}
 
 
@@ -243,7 +246,7 @@ class TrustedUrlProvider(EvolutionSourceProvider):
         owns_client = self.client is None
         client = self.client or httpx.AsyncClient(timeout=httpx.Timeout(20, connect=8))
         try:
-            for url in dict.fromkeys(urls[:12]):
+            for url in list(dict.fromkeys(urls))[:MAX_SOURCE_URLS]:
                 try:
                     documents.append(await self._fetch(race_id, url, client))
                 except Exception as exc:
@@ -300,6 +303,20 @@ class _LinkCollector(HTMLParser):
 class OfficialSourceDiscovery:
     """Find candidate pages only on Formula 1 and team-owned sites."""
     max_candidates = 24
+
+    @staticmethod
+    def _balanced(candidates: list[str], limit: int) -> list[str]:
+        groups: dict[str, list[str]] = {}
+        for url in dict.fromkeys(candidates):
+            groups.setdefault(urlsplit(url).hostname or '', []).append(url)
+        selected = []
+        for index in range(max(map(len, groups.values()), default=0)):
+            for urls in groups.values():
+                if index < len(urls):
+                    selected.append(urls[index])
+                    if len(selected) == limit:
+                        return selected
+        return selected
 
     def __init__(self, client: httpx.AsyncClient | None = None, resolver=socket.getaddrinfo):
         self.client = client
@@ -382,7 +399,7 @@ class OfficialSourceDiscovery:
                                               if self._candidate_matches(url, '', keywords, season))
                         except (httpx.HTTPError, ValueError):
                             continue
-            selected = list(dict.fromkeys(candidates))[:self.max_candidates]
+            selected = self._balanced(candidates, self.max_candidates)
             documents = await TrustedUrlProvider(client, self.resolver).collect(race_id, selected)
             return [str(item.url) for item in documents.documents
                     if self._is_relevant(item, race_name, keywords, season)]
