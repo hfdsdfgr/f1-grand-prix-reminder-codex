@@ -106,6 +106,7 @@ void main() {
       expect(model.components.map((c) => c.id).toSet().length, 13);
       expect(model.components.fold<int>(0, (s, c) => s + c.faces.length), 900);
       expect(model.materials.length, 5);
+      expect(carExplodedSpread, 1.3);
       expect(model.archives.length, 4);
       expect(
         model.archives.every((car) => car['base_3d_model_id'] == null),

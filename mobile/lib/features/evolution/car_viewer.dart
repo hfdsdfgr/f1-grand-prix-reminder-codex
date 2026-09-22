@@ -684,7 +684,8 @@ class CarPainter extends CustomPainter {
 
   (Offset, double) _project(CarPoint p, Size size, [String? part]) {
     final offset = part == null ? (0.0, 0.0, 0.0) : carPartOffset(part);
-    final amount = exploded + (part == selected ? focus * .18 : 0);
+    final amount =
+        exploded * carExplodedSpread + (part == selected ? focus * .18 : 0);
     final x = p.$1 + offset.$1 * amount,
         y = p.$2 - .45 + offset.$2 * amount,
         z = p.$3 + offset.$3 * amount;

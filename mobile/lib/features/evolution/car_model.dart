@@ -22,6 +22,7 @@ const carComponentIds = {
 };
 const _paletteMaterialIds = {'body', 'secondary', 'carbon', 'accent'};
 const _meshMaterialIds = {..._paletteMaterialIds, 'tyre', 'hub'};
+const carExplodedSpread = 1.3;
 
 CarPoint carPartOffset(String id) => switch (id) {
   'front_wing' => (0, 0, -.72),

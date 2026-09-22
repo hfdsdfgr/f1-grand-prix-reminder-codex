@@ -194,7 +194,7 @@ class _GltfCarStageState extends State<GltfCarStage> {
     for (final entry in _parts.entries) {
       final offset = carPartOffset(entry.key);
       final amount =
-          widget.exploded +
+          widget.exploded * carExplodedSpread +
           (entry.key == widget.selected ? widget.focus * .18 : 0);
       entry.value
         ..position = vm.Vector3(
