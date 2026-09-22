@@ -71,6 +71,8 @@ class BriefingWorkerTests(unittest.IsolatedAsyncioTestCase):
         keywords = OfficialSourceDiscovery._keywords('Spanish Grand Prix', 'Madring', 'Spain', 'Madrid')
         self.assertTrue(OfficialSourceDiscovery._is_relevant(relevant, 'Spanish Grand Prix', keywords, 2026))
         self.assertFalse(OfficialSourceDiscovery._is_relevant(unrelated, 'Spanish Grand Prix', keywords, 2026))
+        self.assertFalse(OfficialSourceDiscovery._candidate_matches(
+            'https://team.example/2025-spanish-grand-prix', '', keywords, 2026))
 
 
 if __name__ == '__main__':

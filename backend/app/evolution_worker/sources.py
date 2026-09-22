@@ -318,6 +318,12 @@ class OfficialSourceDiscovery:
         name = ' '.join(race_name.casefold().split())
         return str(season) in text and (name in text or sum(word in text for word in keywords) >= 2)
 
+    @staticmethod
+    def _candidate_matches(url: str, label: str, keywords: set[str], season: int) -> bool:
+        haystack = f'{url} {label}'.casefold()
+        years = set(re.findall(r'20\d{2}', haystack))
+        return (not years or str(season) in years) and any(word in haystack for word in keywords)
+
     async def _page_links(self, url: str, client: httpx.AsyncClient) -> list[tuple[str, str]]:
         current, _, source_type = validate_public_url(url, self.resolver)
         if source_type not in {'formula1_official', 'team_official'}:
@@ -345,6 +351,7 @@ class OfficialSourceDiscovery:
         keywords = self._keywords(race_name, circuit, country, city)
         if not keywords:
             return []
+        season = int(race_id.split('-', 1)[0])
         hosts = ('www.formula1.com', *(host for host, (_, kind) in TRUSTED_HOSTS.items()
                                       if kind == 'team_official'))
         seeds = ['https://www.formula1.com/en/latest/all.html'] + [f'https://{host}/' for host in hosts[1:]]
@@ -358,8 +365,7 @@ class OfficialSourceDiscovery:
                 except (httpx.HTTPError, ValueError):
                     links = []
                 for url, label in links:
-                    haystack = f'{url} {label}'.casefold()
-                    if any(word in haystack for word in keywords):
+                    if self._candidate_matches(url, label, keywords, season):
                         candidates.append(url)
                 host = urlsplit(seed).hostname
                 if host:
@@ -373,12 +379,11 @@ class OfficialSourceDiscovery:
                             if len(xml.content) > MAX_BODY_BYTES:
                                 continue
                             candidates.extend(url for url in re.findall(r'<loc>([^<]+)</loc>', xml.text)
-                                              if any(word in url.casefold() for word in keywords))
+                                              if self._candidate_matches(url, '', keywords, season))
                         except (httpx.HTTPError, ValueError):
                             continue
             selected = list(dict.fromkeys(candidates))[:self.max_candidates]
             documents = await TrustedUrlProvider(client, self.resolver).collect(race_id, selected)
-            season = int(race_id.split('-', 1)[0])
             return [str(item.url) for item in documents.documents
                     if self._is_relevant(item, race_name, keywords, season)]
         finally:
