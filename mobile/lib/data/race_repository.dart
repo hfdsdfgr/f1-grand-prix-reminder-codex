@@ -119,26 +119,35 @@ class RaceFeed {
 class RaceRepository {
   final http.Client client;
   final String baseUrl;
+  String language;
   final SharedPreferences? preferences;
   RaceRepository({
     http.Client? client,
     this.preferences,
     this.baseUrl = ApiConfig.baseUrl,
+    this.language = 'en',
   }) : client = client ?? http.Client();
 
   String _cacheKey(String path) => 'api-cache:$baseUrl$path';
 
-  Future<(dynamic, bool)> _get(String path, Duration timeout) async {
+  Future<(dynamic, bool)> _get(
+    String path,
+    Duration timeout, {
+    bool localized = false,
+  }) async {
+    final localizedPath = localized
+        ? '$path${path.contains('?') ? '&' : '?'}lang=${Uri.encodeQueryComponent(language)}'
+        : path;
     try {
       final response = await client
-          .get(Uri.parse('$baseUrl$path'))
+          .get(Uri.parse('$baseUrl$localizedPath'))
           .timeout(timeout);
       if (response.statusCode != 200) throw Exception('Service unavailable');
       final decoded = jsonDecode(response.body);
-      await preferences?.setString(_cacheKey(path), response.body);
+      await preferences?.setString(_cacheKey(localizedPath), response.body);
       return (decoded, false);
     } catch (_) {
-      final saved = preferences?.getString(_cacheKey(path));
+      final saved = preferences?.getString(_cacheKey(localizedPath));
       if (saved == null) rethrow;
       return (jsonDecode(saved), true);
     }
@@ -200,7 +209,11 @@ class RaceRepository {
 
   Future<RaceBriefingFeed> briefing(String raceId) async {
     final path = '/api/v1/races/${Uri.encodeComponent(raceId)}/briefing';
-    final (json, cached) = await _get(path, const Duration(seconds: 20));
+    final (json, cached) = await _get(
+      path,
+      const Duration(seconds: 20),
+      localized: true,
+    );
     final body = Map<String, dynamic>.from(json as Map);
     if (cached) body['stale'] = true;
     return RaceBriefingFeed(body);
@@ -218,6 +231,7 @@ class RaceRepository {
     final (json, cached) = await _get(
       '/api/v1/evolution?season=$season',
       const Duration(seconds: 20),
+      localized: true,
     );
     return EvolutionFeed(
       Map<String, dynamic>.from(json as Map),
@@ -227,7 +241,11 @@ class RaceRepository {
 
   Future<EvolutionFeed> evolutionRace(String raceId) async {
     final path = '/api/v1/evolution/${Uri.encodeComponent(raceId)}';
-    final (json, cached) = await _get(path, const Duration(seconds: 20));
+    final (json, cached) = await _get(
+      path,
+      const Duration(seconds: 20),
+      localized: true,
+    );
     return EvolutionFeed(
       Map<String, dynamic>.from(json as Map),
       cached: cached,

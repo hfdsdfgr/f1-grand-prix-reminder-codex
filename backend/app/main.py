@@ -11,6 +11,7 @@ from app.models import (
 )
 from app.lifecycle import with_lifecycle
 from app.evolution import EvolutionFeed, EvolutionRaceDetail, load_evolution, load_race_evolution
+from app.localization import requested_language
 from app.results import (
     ChampionshipImpact, ResultsRepository, ResultsFeed, RaceStory, SeasonRosterFeed,
     StrategyFeed, RaceBriefing, build_race_story,
@@ -39,9 +40,9 @@ def health():
 
 
 @app.get('/api/v1/evolution', response_model=EvolutionFeed)
-def evolution(season: int = Query(ge=1950, le=2100)):
+def evolution(season: int = Query(ge=1950, le=2100), lang: str = Query(default='en')):
     try:
-        return load_evolution(app.state.schedules.path, season)
+        return load_evolution(app.state.schedules.path, season, requested_language(lang))
     except Exception as exc:
         raise HTTPException(503, 'Upgrade archive is temporarily unavailable.') from exc
 
@@ -113,9 +114,9 @@ RaceId = Annotated[str, Path(pattern=r'^(19[5-9][0-9]|20[0-9]{2}|2100)-([1-9][0-
 
 
 @app.get('/api/v1/evolution/{race_id}', response_model=EvolutionRaceDetail)
-def evolution_race_detail(race_id: RaceId):
+def evolution_race_detail(race_id: RaceId, lang: str = Query(default='en')):
     try:
-        return load_race_evolution(app.state.schedules.path, race_id)
+        return load_race_evolution(app.state.schedules.path, race_id, requested_language(lang))
     except Exception as exc:
         raise HTTPException(503, 'Race Evolution data is temporarily unavailable.') from exc
 
@@ -183,9 +184,9 @@ def championship_impact(race_id: RaceId):
 
 
 @app.get('/api/v1/races/{race_id}/briefing', response_model=RaceBriefing)
-def race_briefing(race_id: RaceId):
+def race_briefing(race_id: RaceId, lang: str = Query(default='en')):
     race = race_detail(race_id)
     try:
-        return app.state.results.briefing(race.season, race.round)
+        return app.state.results.briefing(race.season, race.round, requested_language(lang))
     except Exception as exc:
         raise HTTPException(503, 'Race briefing is temporarily unavailable. Please retry.') from exc

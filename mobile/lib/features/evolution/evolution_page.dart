@@ -31,11 +31,22 @@ class _EvolutionPageState extends State<EvolutionPage> {
   String? _team, _race;
   String? _selectedUpgrade, _highlightedComponent, _highlightedTeam;
   bool _compareSpecification = false;
+  String? _language;
   late Future<EvolutionFeed> _request = _fetch();
 
   Future<EvolutionFeed> _fetch() => widget.raceId == null
       ? widget.repository.evolution(_season)
       : widget.repository.evolutionRace(widget.raceId!);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final language = Localizations.localeOf(context).toLanguageTag();
+    if (_language != null && _language != language) {
+      _request = _fetch();
+    }
+    _language = language;
+  }
 
   void _load() => setState(() => _request = _fetch());
 

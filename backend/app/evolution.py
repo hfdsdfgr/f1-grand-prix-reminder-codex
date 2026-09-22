@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, HttpUrl, ValidationError
 
 from app.data_schema import connect
+from app.localization import seed_canonical, text
 
 
 class UpgradeSource(BaseModel):
@@ -52,7 +53,7 @@ class EvolutionRaceDetail(BaseModel):
     upgrades: list[UpgradeRead]
 
 
-def load_evolution(path: str, season: int) -> EvolutionFeed:
+def load_evolution(path: str, season: int, language: str = 'en') -> EvolutionFeed:
     with closing(connect(path)) as db:
         db.row_factory = sqlite3.Row
         rows = db.execute('''SELECT u.*,ts.team_id,ts.display_name AS team,
@@ -89,14 +90,25 @@ def load_evolution(path: str, season: int) -> EvolutionFeed:
         except ValidationError:
             continue
         sources.setdefault(row['upgrade_id'], []).append(source)
-    upgrades = [UpgradeRead(
-        id=row['upgrade_id'], team_id=row['team_id'], team=row['team'],
-        race_id=f"{season}-{row['round']}" if row['round'] is not None else None,
-        race=row['race'], round=row['round'], component_id=row['component_type_id'],
-        component=row['component'], title=row['title'], change=row['change_description'],
-        goal=row['technical_goal'], expected_effect=row['expected_effect'],
-        status=row['status'], confidence=row['confidence'], sources=sources[row['upgrade_id']],
-    ) for row in rows if row['upgrade_id'] in sources]
+    upgrades = []
+    with closing(connect(path)) as db, db:
+        for row in rows:
+            if row['upgrade_id'] not in sources:
+                continue
+            values = {'title': row['title'], 'change': row['change_description'],
+                      'goal': row['technical_goal'], 'expected_effect': row['expected_effect']}
+            seed_canonical(db, 'upgrade', row['upgrade_id'], values)
+            upgrades.append(UpgradeRead(
+                id=row['upgrade_id'], team_id=row['team_id'], team=row['team'],
+                race_id=f"{season}-{row['round']}" if row['round'] is not None else None,
+                race=row['race'], round=row['round'], component_id=row['component_type_id'],
+                component=row['component'],
+                title=text(db, 'upgrade', row['upgrade_id'], 'title', language, values['title']) or values['title'],
+                change=text(db, 'upgrade', row['upgrade_id'], 'change', language, values['change']),
+                goal=text(db, 'upgrade', row['upgrade_id'], 'goal', language, values['goal']),
+                expected_effect=text(db, 'upgrade', row['upgrade_id'], 'expected_effect', language, values['expected_effect']),
+                status=row['status'], confidence=row['confidence'], sources=sources[row['upgrade_id']],
+            ))
     upgrade_ids = {}
     for upgrade in upgrades:
         if upgrade.race_id is not None:
@@ -109,9 +121,9 @@ def load_evolution(path: str, season: int) -> EvolutionFeed:
                          updated_at=datetime.now(timezone.utc))
 
 
-def load_race_evolution(path: str, race_id: str) -> EvolutionRaceDetail:
+def load_race_evolution(path: str, race_id: str, language: str = 'en') -> EvolutionRaceDetail:
     season, _ = map(int, race_id.split('-'))
-    feed = load_evolution(path, season)
+    feed = load_evolution(path, season, language)
     return EvolutionRaceDetail(
         race_id=race_id, upgrades=[item for item in feed.upgrades if item.race_id == race_id],
     )

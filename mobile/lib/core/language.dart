@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
+import '../l10n/localized_catalog.dart';
+
+extension AppLocalizationX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this)!;
+}
+
 /// UI strings use English keys; unknown upstream names retain their source text.
 String tr(BuildContext context, String text) =>
-    translate(Localizations.localeOf(context).languageCode, text);
+    localizedText(context, text);
 
 String translate(String language, String text) =>
-    language == 'zh' ? (_chinese[text] ?? text) : text;
+    language.startsWith('zh') ? (chineseTranslations[text] ?? text) : text;
 
 String sessionStatusLabel(String status) => switch (status) {
   'started' => 'Live',
@@ -17,7 +24,10 @@ String sessionStatusLabel(String status) => switch (status) {
   _ => 'Status unknown',
 };
 
-const _chinese = {
+const chineseTranslations = {
+  'Language': '语言',
+  'Follow system': '跟随系统',
+  'Simplified Chinese': '简体中文',
   'Generic model': '通用模型',
   'Generic illustration': '通用技术示意',
   'Car archive': '车型档案',

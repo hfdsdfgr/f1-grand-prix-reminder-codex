@@ -22,6 +22,9 @@ Map<String, dynamic> fixture() => {
 };
 
 void main() {
+  final dispatcher = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
+  dispatcher.localeTestValue = const Locale('zh', 'CN');
+  dispatcher.localesTestValue = const [Locale('zh', 'CN')];
   test('repository restores the last successful schedule offline', () async {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
@@ -213,8 +216,10 @@ void main() {
   });
 
   testWidgets(
-    'defaults to Chinese, switches without refetching and restores preference',
+    'follows the system language, switches immediately and restores preference',
     (tester) async {
+      tester.platformDispatcher.localeTestValue = const Locale('zh', 'CN');
+      addTearDown(tester.platformDispatcher.clearLocaleTestValue);
       SharedPreferences.setMockInitialValues({});
       final preferences = await SharedPreferences.getInstance();
       var requests = 0;
@@ -243,10 +248,10 @@ void main() {
             .languageCode,
         'zh',
       );
-      await tester.tap(find.byTooltip('语言 / Language'));
+      await tester.tap(find.byTooltip('语言'));
       await tester.pumpAndSettle();
       await tester.tap(
-        find.widgetWithText(CheckedPopupMenuItem<String>, 'English'),
+        find.widgetWithText(CheckedPopupMenuItem<String?>, 'English'),
       );
       await tester.pumpAndSettle();
       expect(find.text('Next Grand Prix'), findsOneWidget);
@@ -259,14 +264,14 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Next Grand Prix'), findsOneWidget);
-      await tester.tap(find.byTooltip('语言 / Language'));
+      await tester.tap(find.byTooltip('Language'));
       await tester.pumpAndSettle();
       await tester.tap(
-        find.widgetWithText(CheckedPopupMenuItem<String>, '简体中文'),
+        find.widgetWithText(CheckedPopupMenuItem<String?>, 'Simplified Chinese'),
       );
       await tester.pumpAndSettle();
       expect(find.text('下一站大奖赛'), findsOneWidget);
-      expect(preferences.getString('language'), 'zh');
+      expect(preferences.getString('language'), 'zh-CN');
     },
   );
 }

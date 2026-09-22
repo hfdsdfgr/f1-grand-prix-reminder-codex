@@ -16,6 +16,7 @@ from app.results import (
     SeasonRosterEntry, SeasonRosterFeed, StrategyFeed, StrategyStint, DriverStrategy,
     RaceBriefing, BriefingInsight, BriefingSource, normalize_strategy,
 )
+from app.localization import upsert_translation
 from app.repositories.schedules import ScheduleRepository
 from test_schedules import sample
 
@@ -60,6 +61,12 @@ class ResultsTests(unittest.TestCase):
             briefing = repo.briefing(2026, 1)
             self.assertEqual(briefing.insights[0].topic, 'Technical themes')
             self.assertEqual(str(briefing.sources[0].url), 'https://example.com/interview')
+            with closing(sqlite3.connect(path)) as db, db:
+                upsert_translation(db, 'brief_fact', 'brief_1', 'technical_themes', 'zh-CN', '高速弯平衡有所改善。', 'test')
+            chinese = repo.briefing(2026, 1, 'zh-CN')
+            self.assertEqual(chinese.race_id, briefing.race_id)
+            self.assertEqual(chinese.insights[0].detail, '高速弯平衡有所改善。')
+            self.assertEqual(str(chinese.sources[0].url), str(briefing.sources[0].url))
             with closing(sqlite3.connect(path)) as db, db:
                 db.execute('DELETE FROM interviews')
             self.assertEqual(repo.briefing(2026, 1).insights, [])

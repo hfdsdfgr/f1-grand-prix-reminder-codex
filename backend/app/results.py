@@ -11,6 +11,7 @@ from app.data_schema import (
     PROVIDER_ID, connect, migrate, new_id, record_provider_health, store_raw,
 )
 from app.models import RaceSummary
+from app.localization import seed_canonical, text
 from app.providers.fastf1 import SOURCE_URL as FASTF1_SOURCE_URL, fetch_strategy_rows
 from app.providers.jolpica import BASE_URL, fetch_driver_standings, fetch_standings
 
@@ -745,7 +746,7 @@ class ResultsRepository:
                        (key, feed.model_dump_json()))
         return feed
 
-    def briefing(self, season: int, round_number: int) -> RaceBriefing:
+    def briefing(self, season: int, round_number: int, language: str = 'en') -> RaceBriefing:
         """Return only source-backed, stored briefing output; this never invents a recap."""
         with closing(connect(self.path)) as db:
             race = db.execute('''SELECT r.race_id FROM races r
@@ -803,9 +804,18 @@ class ResultsRepository:
             ('Technical issues', 13, 'technical_issues'), ('Incidents', 14, 'incidents'),
             ('Key quotes', 15, 'key_quotes'),
         )
-        insights = [BriefingInsight(topic=topic, detail=brief[index],
-                                    sources=by_field.get(field, sources))
-                    for topic, index, field in fields if brief and brief[index] and (by_field.get(field) or sources)]
+        insights = []
+        if brief:
+            with closing(connect(self.path)) as db, db:
+                for topic, index, field in fields:
+                    if not brief[index] or not (by_field.get(field) or sources):
+                        continue
+                    seed_canonical(db, 'brief_fact', brief[0], {field: brief[index]})
+                    insights.append(BriefingInsight(
+                        topic=topic,
+                        detail=text(db, 'brief_fact', brief[0], field, language, brief[index]) or brief[index],
+                        sources=by_field.get(field, sources),
+                    ))
         return RaceBriefing(
             race_id=f'{season}-{round_number}', insights=insights, sources=sources,
             updated_at=updated_at or datetime.now(timezone.utc),

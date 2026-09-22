@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/language.dart';
+import 'l10n/app_localizations.dart';
 
 import 'core/theme.dart';
 import 'data/follow_service.dart';
@@ -35,20 +36,26 @@ class _GrandPrixAppState extends State<GrandPrixApp>
   late final FollowService? _follows = widget.preferences == null
       ? null
       : FollowService(widget.preferences!);
-  late String _language = widget.preferences?.getString('language') == 'en'
-      ? 'en'
-      : 'zh';
+  late String? _language = switch (widget.preferences?.getString('language')) {
+    'en' => 'en',
+    'zh-CN' || 'zh' => 'zh-CN',
+    _ => null,
+  };
   late bool _spoilerFree = widget.preferences?.getBool('spoilerFree') ?? false;
   late final Set<String> _revealedSessions =
       widget.preferences?.getStringList('spoilerRevealedSessions')?.toSet() ??
       <String>{};
-  String t(String text) => translate(_language, text);
+  String get _effectiveLanguage =>
+      _language ??
+      WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+  String t(String text) => translate(_effectiveLanguage, text);
   Timer? _reminderTimer;
   bool _syncingReminders = false;
 
   @override
   void initState() {
     super.initState();
+    _repository.language = _effectiveLanguage;
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncReminders();
@@ -70,7 +77,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
     try {
       await _reminders!.syncUpcoming(
         _repository,
-        _language,
+        _effectiveLanguage,
         requestPermissions: requestPermissions,
       );
     } finally {
@@ -79,9 +86,16 @@ class _GrandPrixAppState extends State<GrandPrixApp>
     }
   }
 
-  void _changeLanguage(String language) {
+  void _changeLanguage(String? language) {
     setState(() => _language = language);
-    widget.preferences?.setString('language', language);
+    _repository.language =
+        language ??
+        WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    if (language == null) {
+      widget.preferences?.remove('language');
+    } else {
+      widget.preferences?.setString('language', language);
+    }
     _syncReminders();
   }
 
@@ -111,9 +125,18 @@ class _GrandPrixAppState extends State<GrandPrixApp>
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'GrandPrixReminder',
-    locale: Locale(_language),
-    supportedLocales: const [Locale('zh'), Locale('en')],
-    localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    locale: switch (_language) {
+      'zh-CN' => const Locale('zh', 'CN'),
+      'en' => const Locale('en'),
+      _ => null,
+    },
+    supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
+    localizationsDelegates: [
+      ...AppLocalizations.localizationsDelegates,
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
     theme: raceTheme(Brightness.light),
     darkTheme: raceTheme(Brightness.dark),
     themeMode: ThemeMode.dark,
@@ -128,26 +151,33 @@ class _GrandPrixAppState extends State<GrandPrixApp>
                   spoilerFree: _spoilerFree,
                   onSpoilerFreeChanged: _changeSpoilerFree,
                   follows: _follows,
+                  language: _language,
+                  onLanguageChanged: _changeLanguage,
                 ),
               ),
             ),
             icon: const Icon(Icons.settings_outlined),
           ),
-          PopupMenuButton<String>(
-            tooltip: '语言 / Language',
+          PopupMenuButton<String?>(
+            tooltip: t('Language'),
             icon: const Icon(Icons.translate),
             initialValue: _language,
             onSelected: _changeLanguage,
             itemBuilder: (context) => [
-              CheckedPopupMenuItem(
-                value: 'zh',
-                checked: _language == 'zh',
-                child: const Text('简体中文'),
+              CheckedPopupMenuItem<String?>(
+                value: null,
+                checked: _language == null,
+                child: Text(context.l10n.followSystem),
               ),
-              CheckedPopupMenuItem(
+              CheckedPopupMenuItem<String?>(
+                value: 'zh-CN',
+                checked: _language == 'zh-CN',
+                child: Text(context.l10n.simplifiedChinese),
+              ),
+              CheckedPopupMenuItem<String?>(
                 value: 'en',
                 checked: _language == 'en',
-                child: const Text('English'),
+                child: Text(context.l10n.english),
               ),
             ],
           ),

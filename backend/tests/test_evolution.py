@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from app.data_schema import connect
 from app.evolution import load_evolution
+from app.localization import upsert_translation
 from app.models import RaceFeed
 from app.providers.jolpica import normalize
 from app.repositories.schedules import ScheduleRepository
@@ -41,6 +42,14 @@ class EvolutionTests(unittest.TestCase):
             self.assertEqual(feed.upgrades[0].component_id, 'floor')
             self.assertEqual(feed.timeline[0].race_id, '2026-1')
             self.assertEqual(feed.timeline[0].upgrade_ids, ['sourced'])
+            with closing(connect(path)) as db, db:
+                upsert_translation(db, 'upgrade', 'sourced', 'title', 'zh-CN', '已验证的底板升级', 'test')
+            chinese = load_evolution(path, 2026, 'zh-CN')
+            self.assertEqual(chinese.upgrades[0].id, feed.upgrades[0].id)
+            self.assertEqual(chinese.upgrades[0].status, feed.upgrades[0].status)
+            self.assertEqual(chinese.upgrades[0].title, '已验证的底板升级')
+            self.assertIsNone(chinese.upgrades[0].change)
+            self.assertIsNone(chinese.upgrades[0].goal)
             self.assertEqual(load_evolution(path, 2025).upgrades, [])
             with closing(connect(path)) as db, db:
                 db.execute("UPDATE evolution_source_documents SET canonical_url='javascript:alert(1)'")

@@ -10,11 +10,15 @@ class SettingsPage extends StatefulWidget {
   final bool spoilerFree;
   final ValueChanged<bool> onSpoilerFreeChanged;
   final FollowService? follows;
+  final String? language;
+  final ValueChanged<String?>? onLanguageChanged;
   const SettingsPage({
     super.key,
     required this.spoilerFree,
     required this.onSpoilerFreeChanged,
     this.follows,
+    this.language,
+    this.onLanguageChanged,
   });
 
   @override
@@ -35,6 +39,34 @@ class _SettingsPageState extends State<SettingsPage> {
           child: ListView(
             padding: RaceSpace.page,
             children: [
+              Text(
+                tr(context, 'Language'),
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String?>(
+                initialValue: widget.language,
+                isExpanded: true,
+                decoration: InputDecoration(labelText: tr(context, 'Language')),
+                items: [
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(tr(context, 'Follow system')),
+                  ),
+                  DropdownMenuItem(
+                    value: 'zh-CN',
+                    child: Text(tr(context, 'Simplified Chinese')),
+                  ),
+                  DropdownMenuItem(
+                    value: 'en',
+                    child: Text(tr(context, 'English')),
+                  ),
+                ],
+                onChanged: widget.onLanguageChanged,
+              ),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 24),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(tr(context, 'Spoiler-free mode')),

@@ -38,6 +38,7 @@ void main() {
     final feed = await repository.evolutionRace('2026-14');
 
     expect(requested.path, '/api/v1/evolution/2026-14');
+    expect(requested.queryParameters['lang'], 'en');
     expect(feed.upgrades, isEmpty);
   });
 

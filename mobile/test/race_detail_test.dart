@@ -119,6 +119,9 @@ Map<String, dynamic> championshipImpactFeed() => {
 };
 
 void main() {
+  final dispatcher = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
+  dispatcher.localeTestValue = const Locale('zh', 'CN');
+  dispatcher.localesTestValue = const [Locale('zh', 'CN')];
   testWidgets('post-race detail reveals a hidden session on demand', (
     tester,
   ) async {

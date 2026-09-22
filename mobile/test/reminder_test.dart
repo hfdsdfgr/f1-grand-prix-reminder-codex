@@ -15,7 +15,9 @@ import 'dart:convert';
 import 'app_test.dart' show fixture;
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final dispatcher = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
+  dispatcher.localeTestValue = const Locale('zh', 'CN');
+  dispatcher.localesTestValue = const [Locale('zh', 'CN')];
   const channel = MethodChannel('dexterous.com/flutter/local_notifications');
   final calls = <MethodCall>[];
   final pending = <int, Map<String, dynamic>>{};

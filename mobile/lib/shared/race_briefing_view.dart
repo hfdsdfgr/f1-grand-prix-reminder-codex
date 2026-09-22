@@ -35,6 +35,18 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
     widget.raceId,
   );
   RaceBriefingFeed? _saved;
+  String? _language;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final language = Localizations.localeOf(context).toLanguageTag();
+    if (_language != null && _language != language) {
+      _saved = null;
+      _request = widget.repository.briefing(widget.raceId);
+    }
+    _language = language;
+  }
 
   @override
   void didUpdateWidget(RaceBriefingView oldWidget) {

@@ -433,6 +433,19 @@ CREATE TABLE IF NOT EXISTS briefing_evidence (
     quote TEXT NOT NULL,
     PRIMARY KEY(race_brief_id, field, interview_id, quote)
 );
+-- Presentation text is deliberately separate from factual entities.  A row
+-- never contributes to Claim, Upgrade, BriefFact, evidence, or lifecycle identity.
+CREATE TABLE IF NOT EXISTS content_localizations (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    field TEXT NOT NULL,
+    language TEXT NOT NULL CHECK(language IN ('en','zh-CN')),
+    text TEXT NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'canonical',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(entity_type, entity_id, field, language)
+);
 CREATE TABLE IF NOT EXISTS review_items (
     review_id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT,
     issue_type TEXT NOT NULL, description TEXT NOT NULL, confidence TEXT,
@@ -474,6 +487,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_review_pending_entity
 CREATE INDEX IF NOT EXISTS idx_post_race_jobs_due
     ON post_race_jobs(status,next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_briefing_evidence_brief ON briefing_evidence(race_brief_id,field);
+CREATE INDEX IF NOT EXISTS idx_content_localizations_lookup
+    ON content_localizations(entity_type,entity_id,field,language);
 '''
 
 
