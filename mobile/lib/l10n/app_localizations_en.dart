@@ -654,6 +654,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get s_8566d18186dc => 'Next-race expectations';
 
   @override
+  String get s_876081be1a95 => 'Race assessment';
+
+  @override
+  String get s_15cd4274484a => 'Car strengths';
+
+  @override
+  String get s_bdc60101afdc => 'Car weaknesses';
+
+  @override
+  String get s_acc5f0642691 => 'Technical issues';
+
+  @override
+  String get s_5e326b17d2aa => 'Incidents';
+
+  @override
+  String get s_a4ef02b984aa => 'Key quotes';
+
+  @override
   String get s_f760e16023bf => 'Evolution';
 
   @override
@@ -838,6 +856,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get s_5e241e54398e => 'Follow what changes on the cars.';
+
+  @override
+  String get s_8deaae8141e6 =>
+      'No recorded upgrades for this team this season.';
 
   @override
   String get s_e398417e0944 =>

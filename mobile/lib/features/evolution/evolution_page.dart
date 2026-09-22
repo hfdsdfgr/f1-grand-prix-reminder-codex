@@ -29,7 +29,7 @@ class EvolutionPage extends StatefulWidget {
 class _EvolutionPageState extends State<EvolutionPage> {
   int _season = DateTime.now().year;
   String? _team, _race;
-  String? _selectedUpgrade, _highlightedComponent, _highlightedTeam;
+  String? _selectedUpgrade, _highlightedComponent;
   bool _compareSpecification = false;
   bool _ghostCompare = false;
   String? _language;
@@ -53,9 +53,9 @@ class _EvolutionPageState extends State<EvolutionPage> {
   void _load() => setState(() => _request = _fetch());
 
   void _selectUpgrade(UpgradeEntry entry) => setState(() {
+    _team = _evolutionTeamKey(entry);
     _selectedUpgrade = entry.id;
     _highlightedComponent = entry.componentId;
-    _highlightedTeam = entry.teamId;
   });
 
   void _clearSelection() {
@@ -70,10 +70,16 @@ class _EvolutionPageState extends State<EvolutionPage> {
 
   void _openComponent(String componentId) {
     final race = widget.raceId ?? _race;
-    final entries = _loadedFeed?.upgrades.where((entry) =>
-        entry.componentId == componentId &&
-        (_team == null || entry.teamId == _team) &&
-        (race == null || entry.raceId == race)).toList() ?? <UpgradeEntry>[];
+    final entries =
+        _loadedFeed?.upgrades
+            .where(
+              (entry) =>
+                  entry.componentId == componentId &&
+                  (_team == null || _evolutionTeamKey(entry) == _team) &&
+                  (race == null || entry.raceId == race),
+            )
+            .toList() ??
+        <UpgradeEntry>[];
     setState(() {
       _highlightedComponent = componentId;
       _selectedUpgrade = entries.firstOrNull?.id;
@@ -88,14 +94,21 @@ class _EvolutionPageState extends State<EvolutionPage> {
           controller: controller,
           padding: const EdgeInsets.all(24),
           children: [
-            Text(tr(context, 'Upgrade timeline'),
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              tr(context, 'Upgrade timeline'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             Text(componentId),
             if (entries.isEmpty)
               ContentState(tr(context, 'No recorded upgrade')),
             for (final entry in entries)
-              _UpgradeDetails(entry: entry, selected: true, expanded: true,
-                mappedTo3d: true, onSelected: () => _selectUpgrade(entry)),
+              _UpgradeDetails(
+                entry: entry,
+                selected: true,
+                expanded: true,
+                mappedTo3d: true,
+                onSelected: () => _selectUpgrade(entry),
+              ),
           ],
         ),
       ),
@@ -113,15 +126,6 @@ class _EvolutionPageState extends State<EvolutionPage> {
       const SizedBox(height: 12),
       Text(tr(context, 'Follow what changes on the cars.')),
       const SizedBox(height: 24),
-        CarViewer(
-          enableGltf: widget.enableGltf,
-          highlightedComponentId: _highlightedComponent,
-          highlightedTeamId: _highlightedTeam,
-          onComponentSelected: _openComponent,
-          ghostCompare: _ghostCompare,
-          ghostComponentIds: _ghostComponents,
-        ),
-        const SizedBox(height: 32),
       if (widget.raceId == null) ...[
         Row(
           children: [
@@ -132,7 +136,6 @@ class _EvolutionPageState extends State<EvolutionPage> {
                       _season--;
                       _team = null;
                       _race = null;
-                      _highlightedTeam = null;
                       _clearSelection();
                       _clearCompare();
                       _load();
@@ -153,7 +156,6 @@ class _EvolutionPageState extends State<EvolutionPage> {
                       _season++;
                       _team = null;
                       _race = null;
-                      _highlightedTeam = null;
                       _clearSelection();
                       _clearCompare();
                       _load();
@@ -199,10 +201,27 @@ class _EvolutionPageState extends State<EvolutionPage> {
   );
 
   Widget _content(BuildContext context, EvolutionFeed feed) {
-    final teams = {for (final u in feed.upgrades) u.teamId: u.team};
-    final team = teams.containsKey(_team) ? _team : null;
+    final extraTeams = {
+      for (final entry in feed.upgrades)
+        if (carTeamKey(entry.teamId, entry.team) == 'neutral')
+          _evolutionTeamKey(entry): entry.team,
+    };
+    final validTeamIds = {
+      ...carTeams.map((item) => item.id),
+      ...extraTeams.keys,
+    };
+    final team = validTeamIds.contains(_team)
+        ? _team!
+        : feed.upgrades.isNotEmpty
+        ? _evolutionTeamKey(feed.upgrades.first)
+        : carTeams.first.id;
+    if (_team != team) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _team != team) setState(() => _team = team);
+      });
+    }
     final teamEntries = feed.upgrades
-        .where((u) => team == null || u.teamId == team)
+        .where((u) => _evolutionTeamKey(u) == team)
         .toList();
     teamEntries.sort((a, b) => _teamScore(b).compareTo(_teamScore(a)));
     final races = {
@@ -224,35 +243,38 @@ class _EvolutionPageState extends State<EvolutionPage> {
           ContentState(
             tr(context, 'Showing saved upgrades. They may have changed.'),
           ),
-        if (feed.upgrades.isEmpty)
-          ContentState(
-            tr(context, 'No sourced upgrades are available for this season.'),
-          ),
-        if (feed.upgrades.isNotEmpty && widget.raceId == null) ...[
+        ...[
           DropdownButtonFormField<String>(
             key: ValueKey('team-$_season-$team'),
             initialValue: team,
             isExpanded: true,
             decoration: InputDecoration(labelText: tr(context, 'Team')),
             items: [
-              DropdownMenuItem(
-                value: null,
-                child: Text(tr(context, 'All teams')),
-              ),
-              for (final t in teams.entries)
-                DropdownMenuItem(value: t.key, child: Text(t.value)),
+              for (final item in carTeams)
+                DropdownMenuItem(value: item.id, child: Text(item.name)),
+              for (final item in extraTeams.entries)
+                DropdownMenuItem(value: item.key, child: Text(item.value)),
             ],
             onChanged: (value) => setState(() {
               _team = value;
               _race = null;
-              _highlightedTeam = value;
               _clearSelection();
               _clearCompare();
             }),
           ),
           const SizedBox(height: 16),
+          CarViewer(
+            enableGltf: widget.enableGltf,
+            highlightedComponentId: _highlightedComponent,
+            highlightedTeamId: team,
+            onComponentSelected: _openComponent,
+            showTeamSelector: false,
+            ghostCompare: _ghostCompare,
+            ghostComponentIds: _ghostComponents,
+          ),
+          const SizedBox(height: 32),
         ],
-        if (feed.timeline.isNotEmpty || feed.upgrades.isNotEmpty) ...[
+        if (feed.timeline.isNotEmpty || teamEntries.isNotEmpty) ...[
           SectionHeading(tr(context, 'Season Evolution')),
           const SizedBox(height: 16),
           if (widget.raceId == null && feed.timeline.isNotEmpty)
@@ -331,6 +353,10 @@ class _EvolutionPageState extends State<EvolutionPage> {
               }),
             ),
           const SizedBox(height: 24),
+          if (entries.isEmpty)
+            ContentState(
+              tr(context, 'No recorded upgrades for this team this season.'),
+            ),
           if (race != null && entries.isNotEmpty) ...[
             FilterChip(
               key: const ValueKey('specification-compare'),
@@ -343,7 +369,10 @@ class _EvolutionPageState extends State<EvolutionPage> {
             if (_compareSpecification) ...[
               const SizedBox(height: 16),
               EvolutionComparePanel(
-                previous: tr(context, _previousRace(feed, race)?.race ?? 'Launch specification'),
+                previous: tr(
+                  context,
+                  _previousRace(feed, race)?.race ?? 'Launch specification',
+                ),
                 current: tr(context, entries.first.race ?? race),
                 changes: [
                   for (final entry in entries)
@@ -356,10 +385,14 @@ class _EvolutionPageState extends State<EvolutionPage> {
                       status: entry.status,
                     ),
                 ],
-                ghostAvailable: _previousRace(feed, race) != null &&
-                    entries.any((entry) => carComponentIds.contains(entry.componentId)),
+                ghostAvailable:
+                    _previousRace(feed, race) != null &&
+                    entries.any(
+                      (entry) => carComponentIds.contains(entry.componentId),
+                    ),
                 ghostEnabled: _ghostCompare,
-                onGhostChanged: (value) => setState(() => _ghostCompare = value),
+                onGhostChanged: (value) =>
+                    setState(() => _ghostCompare = value),
                 onComponentSelected: (componentId) {
                   final match = entries.where(
                     (entry) => entry.componentId == componentId,
@@ -392,9 +425,13 @@ class _EvolutionPageState extends State<EvolutionPage> {
       widget.follows?.followsTeam(entry.teamId) == true ? 1 : 0;
 
   EvolutionTimelineEvent? _previousRace(EvolutionFeed feed, String raceId) {
-    final current = feed.timeline.where((event) => event.raceId == raceId).firstOrNull;
+    final current = feed.timeline
+        .where((event) => event.raceId == raceId)
+        .firstOrNull;
     if (current == null) return null;
-    return feed.timeline.where((event) => event.round < current.round).lastOrNull;
+    return feed.timeline
+        .where((event) => event.round < current.round)
+        .lastOrNull;
   }
 
   Set<String> get _ghostComponents {
@@ -402,11 +439,20 @@ class _EvolutionPageState extends State<EvolutionPage> {
     final race = widget.raceId ?? _race;
     if (race == null) return const {};
     return _loadedFeed!.upgrades
-        .where((entry) => entry.raceId == race &&
-            carComponentIds.contains(entry.componentId))
+        .where(
+          (entry) =>
+              entry.raceId == race &&
+              _evolutionTeamKey(entry) == _team &&
+              carComponentIds.contains(entry.componentId),
+        )
         .map((entry) => entry.componentId!)
         .toSet();
   }
+}
+
+String _evolutionTeamKey(UpgradeEntry entry) {
+  final key = carTeamKey(entry.teamId, entry.team);
+  return key == 'neutral' ? 'api:${entry.teamId}' : key;
 }
 
 final _neverNotify = _NeverNotify();

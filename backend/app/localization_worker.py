@@ -10,6 +10,36 @@ from app.evolution_worker.llm import DeepSeekProvider
 from app.localization import seed_canonical, upsert_translation
 
 
+def _proper_names(path: str) -> list[str]:
+    with closing(connect(path)) as db:
+        values = [row[0] for row in db.execute('SELECT full_name FROM drivers')]
+        values.extend(row[0] for row in db.execute('SELECT canonical_name FROM teams'))
+        values.extend(row[0] for row in db.execute('SELECT display_name FROM team_seasons'))
+    return sorted({value for value in values if value}, key=len, reverse=True)
+
+
+def _protect_proper_names(items: list[dict[str, str]], names: list[str]):
+    tokens = {f'__PROPER_NAME_{index:03d}__': name for index, name in enumerate(names)}
+    protected, required = [], {}
+    for item in items:
+        copy = dict(item)
+        needed = set()
+        for token, name in tokens.items():
+            if name in copy['text']:
+                copy['text'] = copy['text'].replace(name, token)
+                needed.add(token)
+        key = (copy['entity_type'], copy['entity_id'], copy['field'])
+        required[key] = needed
+        protected.append(copy)
+    return protected, tokens, required
+
+
+def _restore_proper_names(text: str, tokens: dict[str, str]) -> str:
+    for token, name in tokens.items():
+        text = text.replace(token, name)
+    return text
+
+
 def _items(path: str, public_race_id: str) -> list[dict[str, str]]:
     season, round_number = map(int, public_race_id.split('-'))
     with closing(connect(path)) as db:
@@ -50,12 +80,18 @@ async def localize_race(path: str, race_id: str, *, provider=None) -> dict:
     items = _items(path, race_id)
     if not items:
         return {'race_id': race_id, 'candidates': 0, 'stored': 0}
-    translated = await (provider or DeepSeekProvider()).localize(items, 'zh-CN')
+    protected, tokens, required = _protect_proper_names(items, _proper_names(path))
+    translated = await (provider or DeepSeekProvider()).localize(protected, 'zh-CN')
     allowed = {(item['entity_type'], item['entity_id'], item['field']) for item in items}
-    accepted = [item for item in translated if
-                (item.get('entity_type'), item.get('entity_id'), item.get('field')) in allowed and
-                isinstance(item.get('text'), str) and item['text'].strip() and
-                any('\u4e00' <= char <= '\u9fff' for char in item['text'])]
+    accepted = []
+    for item in translated:
+        key = (item.get('entity_type'), item.get('entity_id'), item.get('field'))
+        text = item.get('text')
+        if (key not in allowed or not isinstance(text, str) or not text.strip() or
+                not any('\u4e00' <= char <= '\u9fff' for char in text) or
+                not all(token in text for token in required[key])):
+            continue
+        accepted.append({**item, 'text': _restore_proper_names(text.strip(), tokens)})
     with closing(connect(path)) as db, db:
         for item in accepted:
             upsert_translation(db, item['entity_type'], item['entity_id'], item['field'],

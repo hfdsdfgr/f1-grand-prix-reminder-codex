@@ -240,6 +240,12 @@ const chineseTranslations = {
   'Upgrade feedback': '升级反馈',
   'Driver concerns': '车手关注点',
   'Next-race expectations': '下一站预期',
+  'Race assessment': '比赛总结',
+  'Car strengths': '赛车优势',
+  'Car weaknesses': '赛车短板',
+  'Technical issues': '技术问题',
+  'Incidents': '比赛事件',
+  'Key quotes': '关键引述',
   'Evolution': '赛车演进',
   'Season': '赛季',
   'Next Grand Prix': '下一站大奖赛',
@@ -304,6 +310,7 @@ const chineseTranslations = {
   'Interview summaries will arrive after the race database is ready.':
       '赛事数据库完善后，将提供车手采访摘要。',
   'Follow what changes on the cars.': '追踪赛车的每一次技术变化。',
+  'No recorded upgrades for this team this season.': '该车队本赛季暂无已记录的升级。',
   'Verified upgrade timelines come first. Interactive car models follow.':
       '先建立可信的升级时间线，再加入交互式赛车模型。',
   'FP1': '第一节练习赛',

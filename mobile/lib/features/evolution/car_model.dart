@@ -24,6 +24,25 @@ const _paletteMaterialIds = {'body', 'secondary', 'carbon', 'accent'};
 const _meshMaterialIds = {..._paletteMaterialIds, 'tyre', 'hub'};
 const carExplodedSpread = 1.3;
 
+class CarTeam {
+  final String id, name;
+  const CarTeam(this.id, this.name);
+}
+
+const carTeams = [
+  CarTeam('alpine', 'Alpine F1 Team'),
+  CarTeam('aston_martin', 'Aston Martin'),
+  CarTeam('audi', 'Audi'),
+  CarTeam('cadillac', 'Cadillac F1 Team'),
+  CarTeam('ferrari', 'Ferrari'),
+  CarTeam('haas', 'Haas F1 Team'),
+  CarTeam('mclaren', 'McLaren'),
+  CarTeam('mercedes', 'Mercedes'),
+  CarTeam('racing_bulls', 'RB F1 Team'),
+  CarTeam('redbull', 'Red Bull'),
+  CarTeam('williams', 'Williams'),
+];
+
 CarPoint carPartOffset(String id) => switch (id) {
   'front_wing' => (0, 0, -.72),
   'nose' => (0, .08, -.32),
@@ -41,13 +60,31 @@ CarPoint carPartOffset(String id) => switch (id) {
   _ => (0, 0, 0),
 };
 
-String carTeamKey(String? teamId) => switch (teamId) {
-  'ferrari' => 'ferrari',
-  'mclaren' => 'mclaren',
-  'mercedes' => 'mercedes',
-  'red_bull' || 'redbull' => 'redbull',
-  _ => 'neutral',
-};
+String carTeamKey(String? teamId, [String? teamName]) {
+  final value = '${teamId ?? ''} ${teamName ?? ''}'.toLowerCase().replaceAll(
+    '-',
+    '_',
+  );
+  if (value.contains('alpine')) return 'alpine';
+  if (value.contains('aston')) return 'aston_martin';
+  if (value.contains('audi')) return 'audi';
+  if (value.contains('cadillac')) return 'cadillac';
+  if (value.contains('ferrari')) return 'ferrari';
+  if (value.contains('haas')) return 'haas';
+  if (value.contains('mclaren')) return 'mclaren';
+  if (value.contains('mercedes')) return 'mercedes';
+  if (value.contains('racing_bulls') || value.contains('rb f1')) {
+    return 'racing_bulls';
+  }
+  if (value.contains('red_bull') ||
+      value.contains('red bull') ||
+      value.contains('redbull')) {
+    return 'redbull';
+  }
+  if (value.contains('williams')) return 'williams';
+  return carTeams.any((team) => team.id == teamId) ? teamId! : 'neutral';
+}
+
 CarPoint _point(List<dynamic> v) => (
   (v[0] as num).toDouble(),
   (v[1] as num).toDouble(),

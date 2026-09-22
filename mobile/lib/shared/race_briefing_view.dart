@@ -82,6 +82,11 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
       if (widget.spoilerHidden) {
         return _BriefingSpoilerGate(onReveal: widget.onReveal);
       }
+      final sources = <String, BriefingSource>{
+        for (final source in briefing.sources) source.url: source,
+        for (final insight in briefing.insights)
+          for (final source in insight.sources) source.url: source,
+      }.values.toList();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -120,21 +125,14 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
               );
             },
           ),
-          if (briefing.sources.isNotEmpty) ...[
+          if (sources.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              tr(context, 'Sources'),
-              style: Theme.of(context).textTheme.titleLarge,
+            OutlinedButton.icon(
+              key: const ValueKey('briefing-sources'),
+              onPressed: () => _showSources(context, sources),
+              icon: const Icon(Icons.source_outlined, size: 18),
+              label: Text('${tr(context, 'Sources')} (${sources.length})'),
             ),
-            const SizedBox(height: 8),
-            for (final source in briefing.sources)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: SourceReference(
-                  publisher: source.provider,
-                  url: source.url,
-                ),
-              ),
           ],
         ],
       );
@@ -151,6 +149,33 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
         ].any((entry) => content.contains(entry.name.toLowerCase()))
         ? 1
         : 0;
+  }
+
+  void _showSources(BuildContext context, List<BriefingSource> sources) {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => ListView(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        shrinkWrap: true,
+        children: [
+          Text(
+            tr(context, 'Sources'),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          for (final source in sources)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SourceReference(
+                publisher: source.provider,
+                url: source.url,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -174,14 +199,6 @@ class _Insight extends StatelessWidget {
             ),
             const SizedBox(height: RaceSpace.small),
             Text(insight.detail, style: Theme.of(context).textTheme.bodyLarge),
-            for (final source in insight.sources)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: SourceReference(
-                  publisher: source.provider,
-                  url: source.url,
-                ),
-              ),
             const SizedBox(height: RaceSpace.large),
             const Divider(),
           ],

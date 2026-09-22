@@ -628,6 +628,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get s_8566d18186dc => '下一站预期';
 
   @override
+  String get s_876081be1a95 => '比赛总结';
+
+  @override
+  String get s_15cd4274484a => '赛车优势';
+
+  @override
+  String get s_bdc60101afdc => '赛车短板';
+
+  @override
+  String get s_acc5f0642691 => '技术问题';
+
+  @override
+  String get s_5e326b17d2aa => '比赛事件';
+
+  @override
+  String get s_a4ef02b984aa => '关键引述';
+
+  @override
   String get s_f760e16023bf => '赛车演进';
 
   @override
@@ -806,6 +824,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get s_5e241e54398e => '追踪赛车的每一次技术变化。';
+
+  @override
+  String get s_8deaae8141e6 => '该车队本赛季暂无已记录的升级。';
 
   @override
   String get s_e398417e0944 => '先建立可信的升级时间线，再加入交互式赛车模型。';
@@ -1557,6 +1578,24 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get s_8566d18186dc => '下一站预期';
 
   @override
+  String get s_876081be1a95 => '比赛总结';
+
+  @override
+  String get s_15cd4274484a => '赛车优势';
+
+  @override
+  String get s_bdc60101afdc => '赛车短板';
+
+  @override
+  String get s_acc5f0642691 => '技术问题';
+
+  @override
+  String get s_5e326b17d2aa => '比赛事件';
+
+  @override
+  String get s_a4ef02b984aa => '关键引述';
+
+  @override
   String get s_f760e16023bf => '赛车演进';
 
   @override
@@ -1735,6 +1774,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get s_5e241e54398e => '追踪赛车的每一次技术变化。';
+
+  @override
+  String get s_8deaae8141e6 => '该车队本赛季暂无已记录的升级。';
 
   @override
   String get s_e398417e0944 => '先建立可信的升级时间线，再加入交互式赛车模型。';

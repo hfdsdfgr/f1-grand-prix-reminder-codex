@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grand_prix_reminder/data/follow_service.dart';
 import 'package:grand_prix_reminder/data/race_repository.dart';
+import 'package:grand_prix_reminder/l10n/app_localizations.dart';
 import 'package:grand_prix_reminder/shared/race_briefing_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -153,5 +154,102 @@ void main() {
       tester.getTopLeft(find.text('Driver concerns')).dy,
       lessThan(tester.getTopLeft(find.text('Other')).dy),
     );
+  });
+
+  testWidgets('briefing keeps deduplicated sources collapsed until requested', (
+    tester,
+  ) async {
+    final repository = RaceRepository(
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode(
+            _briefing(
+              insights: [
+                {
+                  'topic': 'Incidents',
+                  'detail': 'A safety car was deployed.',
+                  'sources': [
+                    {
+                      'provider': 'McLaren',
+                      'url': 'https://www.mclaren.com/racing/formula-1/',
+                    },
+                  ],
+                },
+              ],
+            ),
+          ),
+          200,
+        ),
+      ),
+    );
+    addTearDown(repository.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RaceBriefingView(repository: repository, raceId: '2026-14'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sources (1)'), findsOneWidget);
+    expect(find.text('McLaren'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('briefing-sources')));
+    await tester.pumpAndSettle();
+    expect(find.text('McLaren'), findsOneWidget);
+  });
+
+  testWidgets('briefing category labels localize without translating names', (
+    tester,
+  ) async {
+    final repository = RaceRepository(
+      client: MockClient(
+        (_) async => http.Response.bytes(
+          utf8.encode(
+            jsonEncode(
+              _briefing(
+                insights: const [
+                  {
+                    'topic': 'Race assessment',
+                    'detail': 'Kimi Antonelli 赢得了比赛。',
+                    'sources': [],
+                  },
+                  {
+                    'topic': 'Incidents',
+                    'detail': '第 14 圈出动虚拟安全车。',
+                    'sources': [],
+                  },
+                  {
+                    'topic': 'Key quotes',
+                    'detail': 'Kimi Antonelli：“今天很棒。”',
+                    'sources': [],
+                  },
+                ],
+              ),
+            ),
+          ),
+          200,
+        ),
+      ),
+    );
+    addTearDown(repository.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh', 'CN'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: SingleChildScrollView(
+          child: RaceBriefingView(repository: repository, raceId: '2026-14'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('比赛总结'), findsOneWidget);
+    expect(find.text('比赛事件'), findsOneWidget);
+    expect(find.text('关键引述'), findsOneWidget);
+    expect(find.textContaining('Kimi Antonelli'), findsNWidgets(2));
   });
 }

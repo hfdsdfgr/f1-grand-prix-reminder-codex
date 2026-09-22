@@ -17,6 +17,7 @@ class CarViewer extends StatefulWidget {
     this.highlightedComponentId,
     this.highlightedTeamId,
     this.onComponentSelected,
+    this.showTeamSelector = true,
     this.ghostCompare = false,
     this.ghostComponentIds = const {},
   });
@@ -24,6 +25,7 @@ class CarViewer extends StatefulWidget {
   final bool enableGltf;
   final String? highlightedComponentId, highlightedTeamId;
   final ValueChanged<String>? onComponentSelected;
+  final bool showTeamSelector;
   final bool ghostCompare;
   final Set<String> ghostComponentIds;
   @override
@@ -65,6 +67,7 @@ class _CarViewerState extends State<CarViewer>
       }
     });
   }
+
   late final AnimationController _focusAnimation = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 180),
@@ -237,30 +240,29 @@ class _CarViewerState extends State<CarViewer>
           const SizedBox(height: 8),
           Text(tr(context, 'Generic model — not a team specification.')),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              for (final team in const {
-                'neutral': 'Generic model',
-                'ferrari': 'Ferrari',
-                'mclaren': 'McLaren',
-                'mercedes': 'Mercedes',
-                'redbull': 'Red Bull',
-              }.entries)
-                ChoiceChip(
-                  label: Text(tr(context, team.value)),
-                  selected: _team == team.key,
-                  onSelected: (_) => setState(() {
-                    _team = team.key;
-                    _archive = 'generic';
-                    _compareArchive = null;
-                    _compareMode = false;
-                  }),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          if (widget.showTeamSelector) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final team in const [
+                  CarTeam('neutral', 'Generic model'),
+                  ...carTeams,
+                ])
+                  ChoiceChip(
+                    label: Text(team.name),
+                    selected: _team == team.id,
+                    onSelected: (_) => setState(() {
+                      _team = team.id;
+                      _archive = 'generic';
+                      _compareArchive = null;
+                      _compareMode = false;
+                    }),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           DropdownButtonFormField<String>(
             key: ValueKey('archive-$_team-$_archive'),
             initialValue: _archive,

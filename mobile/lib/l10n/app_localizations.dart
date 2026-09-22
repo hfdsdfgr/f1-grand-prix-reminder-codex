@@ -1335,6 +1335,42 @@ abstract class AppLocalizations {
   /// **'Next-race expectations'**
   String get s_8566d18186dc;
 
+  /// No description provided for @s_876081be1a95.
+  ///
+  /// In en, this message translates to:
+  /// **'Race assessment'**
+  String get s_876081be1a95;
+
+  /// No description provided for @s_15cd4274484a.
+  ///
+  /// In en, this message translates to:
+  /// **'Car strengths'**
+  String get s_15cd4274484a;
+
+  /// No description provided for @s_bdc60101afdc.
+  ///
+  /// In en, this message translates to:
+  /// **'Car weaknesses'**
+  String get s_bdc60101afdc;
+
+  /// No description provided for @s_acc5f0642691.
+  ///
+  /// In en, this message translates to:
+  /// **'Technical issues'**
+  String get s_acc5f0642691;
+
+  /// No description provided for @s_5e326b17d2aa.
+  ///
+  /// In en, this message translates to:
+  /// **'Incidents'**
+  String get s_5e326b17d2aa;
+
+  /// No description provided for @s_a4ef02b984aa.
+  ///
+  /// In en, this message translates to:
+  /// **'Key quotes'**
+  String get s_a4ef02b984aa;
+
   /// No description provided for @s_f760e16023bf.
   ///
   /// In en, this message translates to:
@@ -1694,6 +1730,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Follow what changes on the cars.'**
   String get s_5e241e54398e;
+
+  /// No description provided for @s_8deaae8141e6.
+  ///
+  /// In en, this message translates to:
+  /// **'No recorded upgrades for this team this season.'**
+  String get s_8deaae8141e6;
 
   /// No description provided for @s_e398417e0944.
   ///

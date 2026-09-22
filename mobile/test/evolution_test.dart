@@ -187,6 +187,12 @@ void main() {
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();
     expect(find.text('https://example.com/test'), findsOneWidget);
+    final teamSelector = find.byType(DropdownButtonFormField<String>).first;
+    await tester.ensureVisible(teamSelector);
+    await tester.tap(teamSelector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cadillac F1 Team').last);
+    await tester.pumpAndSettle();
     final spanish = find.byKey(const ValueKey('evolution-2026-3'));
     await tester.ensureVisible(spanish);
     await tester.tap(spanish);
@@ -199,26 +205,47 @@ void main() {
     await tester.ensureVisible(ghost);
     await tester.tap(ghost);
     await tester.pumpAndSettle();
-    expect((tester.widget<CustomPaint>(find.byKey(
-      const ValueKey('car-canvas'))).painter! as CarPainter).ghostCompare, isTrue);
+    expect(
+      (tester
+                  .widget<CustomPaint>(find.byKey(const ValueKey('car-canvas')))
+                  .painter!
+              as CarPainter)
+          .ghostCompare,
+      isTrue,
+    );
     expect(find.textContaining('modified'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
-  test('all lifecycle values remain stable and unknown values are conservative', () {
-    for (final status in evolutionLifecycleStatuses) {
-      final entry = UpgradeEntry({
-        'id': status, 'team_id': 't', 'team': 'Team',
-        'component_id': 'floor', 'component': 'Floor', 'title': 'Update',
-        'status': status, 'confidence': 'high', 'sources': <dynamic>[],
+  test(
+    'all lifecycle values remain stable and unknown values are conservative',
+    () {
+      for (final status in evolutionLifecycleStatuses) {
+        final entry = UpgradeEntry({
+          'id': status,
+          'team_id': 't',
+          'team': 'Team',
+          'component_id': 'floor',
+          'component': 'Floor',
+          'title': 'Update',
+          'status': status,
+          'confidence': 'high',
+          'sources': <dynamic>[],
+        });
+        expect(entry.status, status);
+      }
+      final unknown = UpgradeEntry({
+        'id': 'x',
+        'team_id': 't',
+        'team': 'Team',
+        'component_id': 'floor',
+        'component': 'Floor',
+        'title': 'Update',
+        'status': 'invented',
+        'confidence': 'high',
+        'sources': <dynamic>[],
       });
-      expect(entry.status, status);
-    }
-    final unknown = UpgradeEntry({
-      'id': 'x', 'team_id': 't', 'team': 'Team',
-      'component_id': 'floor', 'component': 'Floor', 'title': 'Update',
-      'status': 'invented', 'confidence': 'high', 'sources': <dynamic>[],
-    });
-    expect(unknown.status, 'unknown');
-  });
+      expect(unknown.status, 'unknown');
+    },
+  );
 }
