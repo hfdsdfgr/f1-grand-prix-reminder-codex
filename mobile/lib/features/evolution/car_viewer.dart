@@ -380,7 +380,9 @@ class _CarViewerState extends State<CarViewer> with TickerProviderStateMixin {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              if (widget.enableGltf && !_gltfUnavailable)
+                              if (widget.enableGltf &&
+                                  !_gltfUnavailable &&
+                                  !_wire)
                                 GltfCarStage(
                                   model: model,
                                   controller: _gltfController,
