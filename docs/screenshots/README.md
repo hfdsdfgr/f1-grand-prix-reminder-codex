@@ -11,3 +11,5 @@ The four images in this directory are unaltered screenshots supplied from the ru
 | `evolution-timeline.jpg` | Published upgrade timeline and source detail | Awaiting a real app screenshot; no image is linked until supplied |
 
 The Android status and navigation bars remain visible to preserve the supplied pixels. For a future replacement, capture the same release build, race and language context, then replace only the corresponding image. Screenshots show application behavior at capture time; race data and availability can change.
+
+The ready-to-upload GitHub Social Preview is [`../social-preview-v1.0.0.jpg`](../social-preview-v1.0.0.jpg), composed from the supplied Home and Evolution screenshots. It is 1280 × 640 and under GitHub's 1 MB upload limit. Upload it under repository **Settings → Social preview → Edit → Upload an image**.
