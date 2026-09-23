@@ -125,7 +125,8 @@ def _persist_facts(path: str, internal_race_id: str, snapshot_id: str,
 
 
 async def execute_briefing(path: str, race_id: str, urls: list[str] | None = None, *,
-                           llm_provider: LLMProvider | None = None) -> dict:
+                           llm_provider: LLMProvider | None = None,
+                           allow_race_day_sources: bool = False) -> dict:
     """Run automatic official discovery, or explicit URLs for debug/replay."""
     migrate(path)
     if urls is None:
@@ -138,8 +139,11 @@ async def execute_briefing(path: str, race_id: str, urls: list[str] | None = Non
     collection.documents = [item.model_copy(update={
         'publication_phase': publication_phase(item.published_at, race_start, race_end),
     }) for item in collection.documents]
-    collection.documents = [item for item in collection.documents
-                            if item.publication_phase in {'post_race', 'unknown'}]
+    phases = {'post_race', 'unknown'}
+    if allow_race_day_sources:
+        # Historical race reports are often published before the +4h fallback finish.
+        phases.add('weekend')
+    collection.documents = [item for item in collection.documents if item.publication_phase in phases]
     if not collection.documents:
         return {'race_id': race_id, 'sources': [], 'provider_failures': collection.failures,
                 'persistence': {'inserted': 0, 'observed': 0, 'status': 'no_post_race_source'}}

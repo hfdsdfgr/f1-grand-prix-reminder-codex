@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from app.briefing_worker import execute_briefing
+from app.historical_briefing_backfill import eligible_post_race, eligible_supplied_report
 from app.data_schema import connect
 from app.evolution_worker.models import BriefingBatch, SourceDocument
 from app.evolution_worker.sources import CollectionResult, OfficialSourceDiscovery
@@ -73,6 +74,36 @@ class BriefingWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(OfficialSourceDiscovery._is_relevant(unrelated, 'Spanish Grand Prix', keywords, 2026))
         self.assertFalse(OfficialSourceDiscovery._candidate_matches(
             'https://team.example/2025-spanish-grand-prix', '', keywords, 2026))
+
+    def test_historical_backfill_requires_dated_matching_post_race_source(self):
+        start = datetime(2026, 9, 6, 13, tzinfo=timezone.utc)
+        end = datetime(2026, 9, 6, 17, tzinfo=timezone.utc)
+        report = document().model_copy(update={
+            'title': '2026 Italian Grand Prix Race Report',
+            'published_at': datetime(2026, 9, 6, 17, 30, tzinfo=timezone.utc),
+        })
+        self.assertTrue(eligible_post_race(report, 'Italian Grand Prix', start, end))
+        self.assertFalse(eligible_post_race(report.model_copy(update={'published_at': None}),
+                                            'Italian Grand Prix', start, end))
+        self.assertFalse(eligible_post_race(report.model_copy(update={
+            'published_at': datetime(2026, 9, 6, 12, tzinfo=timezone.utc)}),
+            'Italian Grand Prix', start, end))
+        self.assertFalse(eligible_post_race(report.model_copy(update={
+            'title': 'Spanish Grand Prix preview after Monza success'}),
+            'Italian Grand Prix', start, end))
+        self.assertFalse(eligible_post_race(report.model_copy(update={
+            'title': 'Win an Italian Grand Prix signed team tee',
+            'url': 'https://www.mercedesamgf1.com/news/win-italian-grand-prix-tee'}),
+            'Italian Grand Prix', start, end))
+        self.assertFalse(eligible_post_race(report.model_copy(update={
+            'title': 'Quiz: How well do you remember the Italian Grand Prix?'}),
+            'Italian Grand Prix', start, end))
+        self.assertTrue(eligible_supplied_report(report.model_copy(update={
+            'published_at': datetime(2026, 9, 6, 15, tzinfo=timezone.utc)}),
+            'Italian Grand Prix', 2026, start))
+        self.assertFalse(eligible_supplied_report(report.model_copy(update={
+            'title': '2026 Spanish Grand Prix race report'}),
+            'Italian Grand Prix', 2026, start))
 
 
 if __name__ == '__main__':
