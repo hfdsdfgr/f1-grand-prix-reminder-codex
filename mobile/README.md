@@ -42,6 +42,16 @@ For the current ECS endpoint, run:
 .\scripts\build-release.ps1
 ```
 
-The script builds a signed release APK and AAB with `API_ENV=production`.
+The script builds signed release artifacts with `API_ENV=production` in
+`mobile/build/release-candidate/`:
+
+- `GrandPrixReminder-v1.0.0.apk` — install on an Android device.
+- `GrandPrixReminder-v1.0.0.aab` — retain for later distribution.
+
+An installed Debug build has a different signature and cannot be updated in
+place with this APK. Uninstalling removes local follows, language and reminder
+settings. The final device smoke test is still required before creating the
+formal v1.0.0 tag or GitHub Release.
+
 When HTTPS is available, pass `-ProductionApiUrl https://your-domain.example`
 and remove the release-only HTTP exception after verification.

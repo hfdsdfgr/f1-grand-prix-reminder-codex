@@ -1,98 +1,70 @@
 # GrandPrixReminder
 
-Evolution 已接入赛季升级档案与车队、分站筛选，升级详情显示原始来源。生产升级资料尚待采集审核，空档案明确提示。下一阶段采用交互优先的低精度通用赛车，详见 `docs/evolution.md`。
+GrandPrixReminder 是一款面向 F1 比赛周末的 Android 赛事助手。它把赛历、成绩、赛后 Briefing 和赛车技术演进放在同一条分站时间线上。当前版本为 **v1.0.0 Release Candidate**；正式 GitHub Release 须等新版 APK 真机验收通过。
 
-轻量级 F1 赛事助手。Flutter 客户端只访问自建 FastAPI 服务。
+## 你可以做什么
 
-当前框架：四页导航、极简自适应明暗主题、下一场赛事、设备时区、倒计时、赛季赛历、Jolpica 标准化及 SQLite 缓存。赛事详情根据赛前、比赛周末和赛后三种生命周期调整内容优先级；Session 状态由后端统一计算。
+- 在 Home 查看下一场比赛、倒计时、周末 Sessions，并设置赛前 24 小时、1 小时、15 分钟或自定义提醒。
+- 在 Calendar 和 GP Detail 查看赛季赛程、比赛状态、成绩与赛道轮廓；结果页支持无剧透模式。
+- 阅读来自赛后报道的结构化 Briefing，以及车队、部件、生命周期明确的 Evolution 升级历程。
+- 在 Evolution 3D Car Explorer 旋转、缩放、切换视角、展开部件，并从部件或时间线打开对应升级及来源；Ghost Compare 可比较两站车辆规格。
+- 在设置中切换简体中文 / English，关注车手与车队。语言、关注、无剧透和提醒设置保存在本机。
 
-关注功能使用设备本地存储；主页和比赛周末会根据 Jolpica 赛季车手积分榜中明确发布的车手—车队归属，展示已关注对象。后端与客户端均保留短期缓存，离线时会标识为已保存数据；不引入账号或云同步。
+Flutter 客户端只连接本项目的 FastAPI API。Backend 汇集赛历与结果，并在比赛结束后按既定时序自动发现来源、生成 Briefing 和 Evolution。Evolution 事实先经过证据校验，再由独立模型复核；未获支持的内容不会发布。每条公开升级保留原始来源，低置信度内容在 App 中提示。**模型复核不能保证内容绝对正确。** 找不到合格技术来源时，对应分站可能没有 Evolution 条目。
 
-赛后 Strategy View 使用 FastF1 的已发布逐圈记录显示轮胎配方、stint 圈段、起始胎龄与进站圈，并单独标示数据来源及缓存状态。没有可验证的轮胎记录时保持为空；不推测策略、undercut 或实时遥测。
-语言默认简体中文，可通过右上角语言按钮切换 English；选择会在本机保存。日期与系统控件同步本地化。翻译集中在 `mobile/lib/core/language.dart`，未收录的上游赛事和赛道名称保留原文。
-赛历条目显示冠军与最快圈并可打开详情，按需查看正赛成绩、排位 Q1/Q2/Q3、积分、发车位和完赛状态。详情页按赛前、比赛周末、赛后三种生命周期显示周末状态；当前已接入 Baku、Marina Bay、Suzuka 的版本化 SVG 赛道轮廓，资源来源和 CC BY 4.0 署名见 `mobile/assets/circuits/ATTRIBUTION.md`。赛季摘要以两次批量请求获取，不按分站产生 N+1 请求；正赛和排位独立缓存，缺失数据明确标记。
-首页「赛事提醒」支持 Android/iOS 本地通知：默认开启后续正赛自动提醒，提前 1 小时通知下一场及已公布的后续比赛，首次启动请求系统授权。正赛、排位和冲刺赛也可分别设置提前 24 小时 / 1 小时 / 15 分钟或自定义 1～10080 分钟；支持保存、替换和取消。网页版仅预览设置，不安排通知。
-原生通知代码及平台配置已接入，实际送达尚需真机验收，详见 `docs/reminders.md`。最近一次成功的赛历与比赛成绩会写入设备缓存；离线重启时继续显示并明确标记为已保存数据。设置中可开启无剧透模式，跨 Home、Races 和详情页隐藏已结束比赛的结果，用户可逐场揭晓。Briefing / Evolution 仍待开发。
+## 安装 Android Release Candidate
 
-## 启动后端（PowerShell，仓库根目录）
+构建完成后，候选包位于：
+
+- `mobile/build/release-candidate/GrandPrixReminder-v1.0.0.apk`
+- `mobile/build/release-candidate/GrandPrixReminder-v1.0.0.aab`（留作后续分发，不直接安装）
+
+将 APK 复制到 Android 手机后打开安装。若手机上已有**同一签名**的正式测试包，Android 可以尝试覆盖更新；若旧包是 Debug 签名，系统会拒绝覆盖。不要为了安装而直接清除应用数据：卸载会移除本机的关注、语言和提醒设置。新版 APK 的真机验收尚待完成，因此当前不提供正式 `v1.0.0` 标签或 GitHub Release。
+
+## 本地运行与检查（Windows PowerShell）
 
 ```powershell
-py -3.13 -m venv backend/.venv
+py -3 -m venv backend/.venv
 backend/.venv/Scripts/python -m pip install -r backend/requirements.txt
 cd backend
 .venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-接口文档：http://127.0.0.1:8000/docs 。`GET /health` 不依赖外网。
-`GET /api/v1/next-race` 获取下一场比赛；`GET /api/v1/races?season=2026` 获取赛历；`GET /api/v1/seasons` 获取可选择的赛季。Race 响应同时包含 `lifecycle_phase`、`current_session`、`next_session` 与 `countdown_target`；比赛进行期间 `next-race` 保持指向当前比赛周末。
-赛历默认包含已完赛分站的冠军与最快圈摘要；通知同步使用 `summaries=false`，只读取轻量赛程。
-`GET /api/v1/races/{season}-{round}` 获取赛事元数据；其 `/results` 与 `/qualifying` 子路径返回标准化成绩、来源和更新时间。
-`GET /api/v1/races/{season}-{round}/schedule-revisions` 返回赛程改期历史；`GET /api/v1/data-health` 返回 Provider、Parser 与 Schema 健康状态。
-成绩缓存：当季 15 分钟、历史赛季 24 小时、空结果 5 分钟；赛季摘要当季 15 分钟、历史赛季 30 天。上游故障有缓存时返回 `stale=true`，无缓存时 503。无效 ID 返回 422，不存在的分站返回 404。
-字段依据 [Jolpica results](https://github.com/jolpica/jolpica-f1/blob/main/docs/endpoints/results.md) 与 [qualifying](https://github.com/jolpica/jolpica-f1/blob/main/docs/endpoints/qualifying.md) 文档。历史 Q2/Q3、车队与最快圈可能缺失，保留为空或未知；最快圈使用来源的排名 1，不从冠军或积分推测。
-未知开赛时间为 null；UTC 时间带时区；上游故障有缓存时返回 `stale=true`，无缓存时返回 503。
-
-`DATABASE_PATH` 默认 `data/schedules.db`。`CORS_ORIGINS` 默认允许本机端口 3000，用逗号分隔覆盖。
-使用 PowerShell `$env:DATABASE_PATH=...` 等设置进程环境变量；`.env.example` 仅是配置清单，不会自动加载。
-赛历来源：[Jolpica 文档](https://github.com/jolpica/jolpica-f1/blob/main/docs/README.md)。未来赛历和临时调整取决于上游发布情况。
-
-数据层已按 `DATA_ARCHITECTURE.md` 建立完整的 Temporal + Versioned + Source-Aware 基础结构。当前赛历和成绩链会写入独立的 Season、Circuit、Race、Session、Driver、Team、TeamSeason、Entry、QualifyingResult、StartingGrid、RaceResult、Revision、Provider、ExternalIdentity、RawSource 与 Review 数据；改期和结果变化追加修订，不静默覆盖历史。
-Briefing、Evolution、规则、积分、处罚、单圈、轮胎、进站、赛车规格、升级生命周期、采访、来源快照、AI Generation、人工审核和审计表也由同一迁移管理，空缺信息保持 NULL/unknown。现有 API 的 `season-round` 兼容 ID 继续用于路由和提醒，内部 ID 同时出现在 API 读模型中。
-数据库启动时执行版本化、事务式迁移；已有 `schedules` 和 `result_cache` 会无损回填，不删除数据库。重要 Provider 响应按内容哈希保留原始记录；缺少外部身份时创建低可信审核项，不根据相似姓名猜测合并。
-
-## 启动 Flutter
-
-本次工作使用仓库忽略的 `.tools/flutter` SDK；也可使用已安装的 Flutter stable。
+新终端运行 Flutter；仓库忽略的 `.tools/flutter` 也可替换为已安装的 Flutter SDK：
 
 ```powershell
 cd mobile
 ../.tools/flutter/bin/flutter.bat pub get
-../.tools/flutter/bin/flutter.bat run -d chrome --web-port=3000
+../.tools/flutter/bin/flutter.bat run
 ```
 
-默认 `development` 环境使用本地 Backend。Android 模拟器使用
-`--dart-define=API_BASE_URL=http://10.0.2.2:8000`；真机测试使用
-`--dart-define=API_ENV=test`，连接已配置的 ECS Nginx Backend。v1.0 正式构建
-使用 `API_ENV=production`，目前同样连接 `http://8.134.70.237`；
-HTTPS/域名部署推迟到 v1.0 之后，Android release 仅对该 IP 放行 HTTP。
-Evolution 技术主张经来源证据校验与独立模型复核后自动发布；无法确认的内容不发布，低置信度内容在页面标注。iOS 构建需要 macOS/Xcode，Android 构建需要 Android SDK。
+`development` 默认连接 `http://127.0.0.1:8000`。Android 模拟器可用 `--dart-define=API_BASE_URL=http://10.0.2.2:8000`；连接现有 ECS 可用 `--dart-define=API_ENV=test`。正式构建必须使用 `API_ENV=production`：
 
-本机已安装 Android SDK、Android 35 模拟器镜像及硬件加速驱动，AVD 名为 `F1Reminder_API35`。在仓库根目录运行 `scripts/run-emulator.ps1 -ShowWindow` 可显示模拟器；运行 `scripts/build-android.ps1` 构建连接 ECS 测试 Backend 的调试 APK，或以 `-ApiEnvironment development` 构建本地开发版本。SDK、镜像和构建缓存保留在忽略的 `.tools` 中。
-`scripts/reminder-fixture.py` 是独立的模拟赛历服务（端口 8001），配合 `scripts/build-android.ps1 -ApiBaseUrl http://10.0.2.2:8001` 验证连续通知；该数据仅供测试。
+```powershell
+./scripts/build-release.ps1
+```
 
-## 检查
+该脚本需要本地 `mobile/android/key.properties` 与 `mobile/android/app/grandprix-upload.jks`，并构建已签名 APK/AAB。签名文件和密码均被 Git 忽略。`API_BASE_URL` 可以替换成将来的 HTTPS 域名；当前正式构建仅对 ECS 的 `8.134.70.237` 放行 HTTP 明文连接。
 
 ```powershell
 cd backend
-.venv/Scripts/python -m unittest discover -s tests -v
+.venv/Scripts/python -m unittest discover -s tests -q
 cd ../mobile
 ../.tools/flutter/bin/flutter.bat analyze
 ../.tools/flutter/bin/flutter.bat test
 ```
 
-生产赛季数据可在备份数据库后重复初始化：
+## API 与数据
 
-```bash
-python -m app.production_bootstrap --season 2026 --database /opt/grandprixreminder/backend/data/schedules.db
-```
+主要只读接口：`/api/v1/next-race`、`/api/v1/races?season=2026`、`/api/v1/races/{season}-{round}/results`、`/api/v1/races/{season}-{round}/briefing`、`/api/v1/evolution/{season}-{round}`。Briefing 与 Evolution 支持 `?lang=en` / `?lang=zh-CN`；缺少译文时回退英文，来源和业务实体 ID 不随语言变化。`GET /health` 可用于服务健康检查。
 
-该命令只调用现有赛历、车手阵容、排位和正赛成绩 Repository；
-Briefing 与 Evolution 继续由各自的来源和审核流程管理。
+当前服务路径是 Internet → ECS Nginx (`:80`) → 本机 FastAPI (`127.0.0.1:8000`)。DeepSeek API Key 仅在服务器 systemd EnvironmentFile 中提供，客户端、Git 和 APK 不包含该密钥。数据设计见 [DATA_ARCHITECTURE.md](DATA_ARCHITECTURE.md)，客户端说明见 [mobile/README.md](mobile/README.md)。
 
-## 结构与约定
+## 已知限制
 
-- `backend/app/providers`：读取第三方赛历、校验并转换为内部模型。
-- `backend/app/data_schema.py`：完整 SQLite Schema、版本迁移、原始来源和 Provider 健康状态。
-- `backend/app/repositories`：持久化规范化赛历实体、身份映射和赛程修订，并维护兼容缓存；当季缓存 1 小时、历史赛季 24 小时。
-- `mobile/lib/features`：Home、Races、Briefing、Evolution 和交互式赛车视图。
-- `mobile/lib/data`：客户端内部模型及后端访问；不接触上游 schema。
-- `mobile/lib/core/theme.dart` 和 `docs/design.md`：信息层级、配色、字体与间距规范。
+- v1.0 Backend 使用公网 IP + HTTP，通信未加密；HTTPS 与域名尚未部署。
+- Evolution 的自动模型复核仍有误判风险；低置信度提示不能替代对原始来源的核对。
+- 部分比赛缺少合格官方技术来源，历史回填覆盖率不代表未来每场比赛都有数据。
+- 新版正式 APK 的 Android 真机 smoke test 尚未完成。
 
-客户端刷新失败时优先使用 SharedPreferences 中最近一次成功的响应，覆盖 Home、赛季赛历和按需加载的比赛成绩。缓存只作为带 `stale=true` 的离线读路径，不替代后端来源与缓存策略。
-开发路线见 `development.md`，先完成 Home + Races MVP，再加入 AI 和 3D。
-
-## 凭据
-
-GitHub token 已由 Git Credential Manager 保存在系统凭据存储，原明文文件已删除。
-使用凭据管理器读取凭据，保持 token 不进入代码、日志或提交。
-正式构建说明见 `mobile/README.md`；release keystore 和密码文件只保存在本机且被 Git 忽略。
+详见 [v1.0.0 Release Notes](docs/release-notes-v1.0.0.md) 与 [CHANGELOG.md](CHANGELOG.md)。

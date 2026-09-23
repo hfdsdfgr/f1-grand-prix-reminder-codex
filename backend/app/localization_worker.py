@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from contextlib import closing
+from unicodedata import combining, normalize
 
 from app.data_schema import connect, migrate
 from app.evolution_worker.llm import DeepSeekProvider
@@ -12,10 +13,19 @@ from app.localization import seed_canonical, upsert_translation
 
 def _proper_names(path: str) -> list[str]:
     with closing(connect(path)) as db:
-        values = [row[0] for row in db.execute('SELECT full_name FROM drivers')]
+        drivers = [row[0] for row in db.execute('SELECT full_name FROM drivers')]
+        values = list(drivers)
+        for full_name in drivers:
+            parts = full_name.split()
+            if len(parts) > 1:
+                values.extend((parts[0], parts[-1]))
         values.extend(row[0] for row in db.execute('SELECT canonical_name FROM teams'))
         values.extend(row[0] for row in db.execute('SELECT display_name FROM team_seasons'))
-    return sorted({value for value in values if value}, key=len, reverse=True)
+        values.extend(row[0] for row in db.execute('SELECT canonical_name FROM circuits'))
+    aliases = {value for value in values if value and len(value) >= 3}
+    aliases.update(''.join(char for char in normalize('NFKD', value) if not combining(char))
+                   for value in tuple(aliases))
+    return sorted(aliases, key=len, reverse=True)
 
 
 def _protect_proper_names(items: list[dict[str, str]], names: list[str]):
@@ -75,13 +85,22 @@ def _items(path: str, public_race_id: str) -> list[dict[str, str]]:
     return items
 
 
-async def localize_race(path: str, race_id: str, *, provider=None) -> dict:
+async def localize_race(path: str, race_id: str, *, provider=None,
+                        refresh: bool = False) -> dict:
     migrate(path)
     items = _items(path, race_id)
+    if not refresh:
+        with closing(connect(path)) as db:
+            items = [item for item in items if not db.execute('''SELECT 1 FROM content_localizations
+                WHERE entity_type=? AND entity_id=? AND field=? AND language='zh-CN' ''',
+                (item['entity_type'], item['entity_id'], item['field'])).fetchone()]
     if not items:
         return {'race_id': race_id, 'candidates': 0, 'stored': 0}
     protected, tokens, required = _protect_proper_names(items, _proper_names(path))
-    translated = await (provider or DeepSeekProvider()).localize(protected, 'zh-CN')
+    llm = provider or DeepSeekProvider()
+    translated = []
+    for offset in range(0, len(protected), 6):
+        translated.extend(await llm.localize(protected[offset:offset + 6], 'zh-CN'))
     allowed = {(item['entity_type'], item['entity_id'], item['field']) for item in items}
     accepted = []
     for item in translated:
@@ -104,8 +123,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('race_id')
     parser.add_argument('--database', default='data/schedules.db')
+    parser.add_argument('--refresh', action='store_true',
+                        help='Regenerate existing presentation translations for this race only')
     args = parser.parse_args()
-    print(asyncio.run(localize_race(args.database, args.race_id)))
+    print(asyncio.run(localize_race(args.database, args.race_id, refresh=args.refresh)))
 
 
 if __name__ == '__main__':

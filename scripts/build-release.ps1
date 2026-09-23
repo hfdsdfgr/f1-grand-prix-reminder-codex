@@ -38,8 +38,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Release APK build failed.' }
     & $flutter build appbundle --release @defines
     if ($LASTEXITCODE -ne 0) { throw 'Release AAB build failed.' }
-    Get-Item -LiteralPath 'build/app/outputs/flutter-apk/app-release.apk',
-        'build/app/outputs/bundle/release/app-release.aab' |
+    $candidateDir = Join-Path $projectRoot 'mobile/build/release-candidate'
+    New-Item -ItemType Directory -Force $candidateDir | Out-Null
+    Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-release.apk' -Destination (Join-Path $candidateDir 'GrandPrixReminder-v1.0.0.apk') -Force
+    Copy-Item -LiteralPath 'build/app/outputs/bundle/release/app-release.aab' -Destination (Join-Path $candidateDir 'GrandPrixReminder-v1.0.0.aab') -Force
+    Get-Item -LiteralPath (Join-Path $candidateDir 'GrandPrixReminder-v1.0.0.apk'),
+        (Join-Path $candidateDir 'GrandPrixReminder-v1.0.0.aab') |
         Select-Object FullName, Length, LastWriteTime
 } finally {
     Pop-Location

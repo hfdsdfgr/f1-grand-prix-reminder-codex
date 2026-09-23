@@ -562,6 +562,25 @@ class PersistenceTests(unittest.TestCase):
 
 
 class EvolutionAutoReviewTests(unittest.IsolatedAsyncioTestCase):
+    async def test_model_review_failure_keeps_claim_unpublished(self):
+        class FailingReviewer:
+            async def review_evolution(self, race_id, claims):
+                raise RuntimeError('model unavailable')
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            document = source()
+            validated = validate_batch(extraction(), [document])
+            persist_validated(path, [document], validated.results, provider='deepseek',
+                              model='test', prompt_version='p', pipeline_version='v')
+            with self.assertRaisesRegex(RuntimeError, 'model unavailable'):
+                await auto_review_race(path, '2026-1', FailingReviewer())
+            with closing(connect(path)) as db:
+                self.assertEqual(db.execute("SELECT review_status FROM upgrades").fetchone()[0],
+                                 'pending_review')
+            self.assertEqual(load_evolution(path, 2026).upgrades, [])
+
     async def test_differently_worded_second_source_merges_into_published_upgrade(self):
         class Reviewer:
             async def review_evolution(self, race_id, claims):

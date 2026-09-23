@@ -43,12 +43,15 @@ class PostRaceTests(unittest.IsolatedAsyncioTestCase):
                            'app.post_race.auto_review_race', new_callable=AsyncMock,
                            return_value={'published': 0}) as reviewer, patch(
                            'app.post_race.execute_briefing', new_callable=AsyncMock,
-                           return_value={'sources': []}) as briefing:
+                           return_value={'sources': []}) as briefing, patch(
+                           'app.post_race.localize_race', new_callable=AsyncMock,
+                           return_value={'stored': 0}) as localization:
                 await orchestrator._run_evolution('2026-1', 'initial')
                 await orchestrator._run_briefing('2026-1', 'initial')
             evolution.assert_awaited_once_with(path, '2026-1')
             reviewer.assert_awaited_once_with(path, '2026-1')
             briefing.assert_awaited_once_with(path, '2026-1', allow_race_day_sources=True)
+            self.assertEqual(localization.await_count, 2)
 
     async def test_unfinished_race_does_not_create_jobs(self):
         with tempfile.TemporaryDirectory() as directory:
