@@ -201,6 +201,7 @@ String localizedText(BuildContext context, String text) {
     'No verified briefing is available for this race.' => strings.s_21dcdf59d075,
     'No completed race is available for briefing.' => strings.s_239de103e613,
     'Sources' => strings.s_2eb56be3c2d9,
+    'Low-confidence AI assessment. Check the linked source.' => strings.s_1535d3d0cead,
     'Technical themes' => strings.s_0cccd48e35ce,
     'Team performance' => strings.s_30a5c875e032,
     'Tyre issues' => strings.s_1a1406a86d10,

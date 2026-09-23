@@ -55,7 +55,7 @@ cd mobile
 `--dart-define=API_ENV=test`，连接已配置的 ECS Nginx Backend。v1.0 正式构建
 使用 `API_ENV=production`，目前同样连接 `http://8.134.70.237`；
 HTTPS/域名部署推迟到 v1.0 之后，Android release 仅对该 IP 放行 HTTP。
-Evolution 技术主张仍须人工审核后发布。iOS 构建需要 macOS/Xcode，Android 构建需要 Android SDK。
+Evolution 技术主张经来源证据校验与独立模型复核后自动发布；无法确认的内容不发布，低置信度内容在页面标注。iOS 构建需要 macOS/Xcode，Android 构建需要 Android SDK。
 
 本机已安装 Android SDK、Android 35 模拟器镜像及硬件加速驱动，AVD 名为 `F1Reminder_API35`。在仓库根目录运行 `scripts/run-emulator.ps1 -ShowWindow` 可显示模拟器；运行 `scripts/build-android.ps1` 构建连接 ECS 测试 Backend 的调试 APK，或以 `-ApiEnvironment development` 构建本地开发版本。SDK、镜像和构建缓存保留在忽略的 `.tools` 中。
 `scripts/reminder-fixture.py` 是独立的模拟赛历服务（端口 8001），配合 `scripts/build-android.ps1 -ApiBaseUrl http://10.0.2.2:8001` 验证连续通知；该数据仅供测试。

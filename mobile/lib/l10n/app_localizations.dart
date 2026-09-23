@@ -1293,6 +1293,12 @@ abstract class AppLocalizations {
   /// **'Sources'**
   String get s_2eb56be3c2d9;
 
+  /// No description provided for @s_1535d3d0cead.
+  ///
+  /// In en, this message translates to:
+  /// **'Low-confidence AI assessment. Check the linked source.'**
+  String get s_1535d3d0cead;
+
   /// No description provided for @s_0cccd48e35ce.
   ///
   /// In en, this message translates to:

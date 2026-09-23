@@ -188,7 +188,7 @@ def persist_validated(path: str, documents: list[SourceDocument], results: list[
                                    (new_id('ule'), upgrade_id, race_id, update.status.value, now,
                                     anchor.anchor_id, claim_id, lifecycle_key))
                         _open_review(db, 'evolution_upgrade', upgrade_id, 'ai_generated',
-                                     'Evidence claim requires human review.', str(update.confidence), now)
+                                     'Evidence claim awaits review.', str(update.confidence), now)
                         inserted += 1
                     for field in anchor.supports:
                         db.execute('''INSERT INTO claim_evidence VALUES (?,?,?)

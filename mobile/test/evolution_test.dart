@@ -29,7 +29,7 @@ void main() {
                 'component': 'Floor',
                 'title': 'Revised floor',
                 'status': 'tested',
-                'confidence': 'high',
+                'confidence': '0.62',
                 'race_id': '2026-1',
                 'race': 'Test Grand Prix',
                 'round': 1,
@@ -187,6 +187,10 @@ void main() {
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();
     expect(find.text('https://example.com/test'), findsOneWidget);
+    expect(
+      find.text('Low-confidence AI assessment. Check the linked source.'),
+      findsOneWidget,
+    );
     final teamSelector = find.byType(DropdownButtonFormField<String>).first;
     await tester.ensureVisible(teamSelector);
     await tester.tap(teamSelector);

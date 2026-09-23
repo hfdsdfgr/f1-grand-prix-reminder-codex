@@ -8,6 +8,7 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 
 from app.evolution_worker.llm import DeepSeekProvider, LLMProvider, PIPELINE_VERSION, PROMPT_VERSION
+from app.evolution_worker.models import ExtractionBatch
 from app.evolution_worker.sources import EvolutionSourceProvider, OfficialSourceDiscovery, TrustedUrlProvider
 from app.evolution_worker.sources import publication_phase
 from app.evolution_worker.validator import validate_batch
@@ -76,7 +77,27 @@ async def run_worker(
     if not collection.documents:
         raise RuntimeError('No readable trusted source was collected; DeepSeek was not called')
     logger.info('DeepSeek request started')
-    extracted = await llm_provider.extract_evolution(race_id, collection.documents)
+    batches = []
+    extraction_failures = []
+    # Bound each request's source text and output size; a large combined JSON
+    # response can be truncated even when every individual article is valid.
+    async def extract_group(documents):
+        try:
+            batches.append(await llm_provider.extract_evolution(race_id, documents))
+        except Exception as exc:
+            logger.warning('DeepSeek source batch failed: %s', type(exc).__name__)
+            if len(documents) > 1:
+                for document in documents:
+                    await extract_group([document])
+            else:
+                extraction_failures.append({'sources': [documents[0].source_id],
+                                            'error_type': type(exc).__name__})
+
+    for offset in range(0, len(collection.documents), 2):
+        await extract_group(collection.documents[offset:offset + 2])
+    if not batches:
+        raise RuntimeError('DeepSeek extraction failed for all source batches')
+    extracted = ExtractionBatch(results=[result for batch in batches for result in batch.results])
     logger.info('DeepSeek extraction completed')
     raw_results = [item.model_dump(mode='json') for item in extracted.results]
     validated = validate_batch(extracted, collection.documents)
@@ -85,7 +106,7 @@ async def run_worker(
         '_documents': collection.documents,
         '_validated_results': validated.results,
         'race_id': race_id,
-        'job_status': 'partial' if collection.failures else 'completed',
+        'job_status': 'partial' if collection.failures or extraction_failures else 'completed',
         'review_status': validated.review_status,
         'model_provider': 'deepseek',
         'model_name': llm_provider.model_name,
@@ -100,6 +121,7 @@ async def run_worker(
             'publication_phase': item.publication_phase, 'content_hash': item.content_hash,
         } for item in collection.documents],
         'provider_failures': collection.failures,
+        'extraction_failures': extraction_failures,
         'duplicates_skipped': collection.duplicates_skipped,
         'deepseek_raw_results': raw_results,
         'validation_issues': validated.issues,
@@ -127,19 +149,29 @@ async def execute_evolution(path: str, race_id: str, urls: list[str], *, dry_run
     return output
 
 
-async def execute_discovered_evolution(path: str, race_id: str) -> dict:
+async def execute_discovered_evolution(path: str, race_id: str, *, dry_run: bool = False) -> dict:
     """Production scheduler entry point; manual URL mode remains in execute_evolution."""
-    try:
-        await sync_car_catalog(path, int(race_id.split('-', 1)[0]))
-    except Exception as exc:
-        logger.warning('Official car catalog sync failed: %s', type(exc).__name__)
+    if not dry_run:
+        try:
+            await sync_car_catalog(path, int(race_id.split('-', 1)[0]))
+        except Exception as exc:
+            logger.warning('Official car catalog sync failed: %s', type(exc).__name__)
     context = race_context(path, race_id)
-    urls = await OfficialSourceDiscovery().discover(race_id=race_id, **context)
+    race_start, _ = race_window(path, race_id)
+    urls = await OfficialSourceDiscovery().discover(
+        race_id=race_id, race_start=race_start, **context)
     if not urls:
         return {'race_id': race_id, 'sources': [], 'provider_failures': [],
                 'discovery': {'urls': [], 'status': 'no_official_source'}}
-    output = await execute_evolution(path, race_id, urls)
-    output['discovery'] = {'urls': urls, 'status': 'found'}
+    # Only technical-source pages can originate an Upgrade. Race reports belong to Briefing.
+    selected = [url for url in urls if any(term in url.lower() for term in (
+        'upgrade', 'technical', 'tech-talk', 'tech-focus', 'new-floor', 'new-wing',
+    ))][:8]
+    if not selected:
+        return {'race_id': race_id, 'sources': [], 'provider_failures': [],
+                'discovery': {'urls': [], 'found': len(urls), 'status': 'no_technical_source'}}
+    output = await execute_evolution(path, race_id, selected, dry_run=dry_run)
+    output['discovery'] = {'urls': selected, 'found': len(urls), 'status': 'found'}
     return output
 
 

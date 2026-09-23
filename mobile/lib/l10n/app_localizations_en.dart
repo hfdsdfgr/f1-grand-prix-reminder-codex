@@ -633,6 +633,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get s_2eb56be3c2d9 => 'Sources';
 
   @override
+  String get s_1535d3d0cead =>
+      'Low-confidence AI assessment. Check the linked source.';
+
+  @override
   String get s_0cccd48e35ce => 'Technical themes';
 
   @override

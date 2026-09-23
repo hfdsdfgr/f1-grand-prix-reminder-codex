@@ -8,11 +8,12 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app.evolution_worker.llm import DeepSeekProvider
+from app.evolution_worker.llm import DeepSeekProvider, ReviewBatch, _validated_response
+from app.evolution_worker.auto_review import auto_review_race
 from app.evolution_worker.models import ExtractionBatch, SourceDocument, UpgradeStatus
 from app.evolution_worker.sources import (
     OfficialSourceDiscovery, TrustedUrlProvider, canonical_url, clean_html, deduplicate, publication_phase,
@@ -20,7 +21,7 @@ from app.evolution_worker.sources import (
 )
 from app.evolution_worker.validator import validate_batch
 from app.evolution_worker.persistence import persist_validated, review
-from app.evolution_worker.worker import race_window
+from app.evolution_worker.worker import execute_discovered_evolution, race_window, run_worker
 from app.data_schema import connect
 from app.evolution import load_evolution
 from app.models import RaceFeed
@@ -69,6 +70,44 @@ def extraction(change='Revised floor geometry', quote='tested a revised floor ge
 
 
 class EvolutionSourceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_extraction_batches_sources_and_keeps_success_after_one_failure(self):
+        documents = [source(f'src_{index}', text=f'Revised floor specification {index}')
+                     for index in range(3)]
+
+        class Collector:
+            async def collect(self, race_id, urls):
+                from app.evolution_worker.sources import CollectionResult
+                return CollectionResult(documents, [])
+
+        class Model:
+            model_name = 'test'
+            calls = []
+
+            async def extract_evolution(self, race_id, items):
+                self.calls.append([item.source_id for item in items])
+                if len(items) == 2 or items[0].source_id == 'src_0':
+                    raise ValueError('truncated response')
+                return ExtractionBatch(results=[])
+
+        model = Model()
+        result = await run_worker('2026-1', [], Collector(), model)
+        self.assertEqual(model.calls, [['src_0', 'src_1'], ['src_0'], ['src_1'], ['src_2']])
+        self.assertEqual(result['job_status'], 'partial')
+        self.assertEqual(result['extraction_failures'][0]['sources'], ['src_0'])
+
+    async def test_discovered_evolution_requires_technical_source_url(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            report = 'https://www.formula1.com/en/latest/article/race-report-australian-grand-prix.abc'
+            with patch('app.evolution_worker.worker.sync_car_catalog', new_callable=AsyncMock), patch(
+                'app.evolution_worker.worker.OfficialSourceDiscovery.discover',
+                new_callable=AsyncMock, return_value=[report]), patch(
+                'app.evolution_worker.worker.execute_evolution', new_callable=AsyncMock) as extraction:
+                result = await execute_discovered_evolution(path, '2026-1')
+            self.assertEqual(result['discovery']['status'], 'no_technical_source')
+            extraction.assert_not_awaited()
+
     def test_discovery_balances_candidates_across_official_hosts(self):
         candidates = [
             'https://www.formula1.com/one', 'https://www.formula1.com/two',
@@ -79,6 +118,36 @@ class EvolutionSourceTests(unittest.IsolatedAsyncioTestCase):
             'https://www.formula1.com/one', 'https://www.mclaren.com/one',
             'https://www.ferrari.com/one', 'https://www.formula1.com/two',
         ])
+        self.assertFalse(OfficialSourceDiscovery._usable_url(
+            'https://www.mercedesamgf1.com/news/win-a-signed-tee'))
+
+    async def test_discovery_reads_official_article_sitemap_index(self):
+        report = 'https://www.formula1.com/en/latest/article/spanish-grand-prix-race-report.abc'
+        requested = []
+
+        async def handler(request):
+            requested.append(str(request.url))
+            path = request.url.path
+            if path == '/robots.txt' and request.url.host == 'www.formula1.com':
+                return httpx.Response(200, text='Sitemap: https://www.formula1.com/sitemap.xml')
+            if path == '/sitemap.xml':
+                return httpx.Response(200, text='<loc>https://www.formula1.com/en/latest/article/sitemap.xml</loc>')
+            if path == '/en/latest/article/sitemap.xml':
+                return httpx.Response(200, text='<loc>https://www.formula1.com/en/latest/articles/sitemap-1.xml</loc>')
+            if path == '/en/latest/articles/sitemap-1.xml':
+                return httpx.Response(200, text=f'<loc>{report}</loc>')
+            if str(request.url) == report:
+                return httpx.Response(200, headers={'content-type': 'text/html'}, text=(
+                    '<title>2026 Spanish Grand Prix Race Report</title><article>'
+                    'The 2026 Spanish Grand Prix race report covers the Spanish Grand Prix. '
+                    'The team reviewed its race strategy and the drivers discussed the result.'
+                    '</article>'))
+            return httpx.Response(404)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            urls = await OfficialSourceDiscovery(client, public_resolver).discover(
+                race_id='2026-14', race_name='Spanish Grand Prix')
+        self.assertEqual(urls, [report], requested)
 
     def test_json_ld_publication_time_drives_post_race_phase(self):
         published = published_at_from_html(
@@ -202,6 +271,13 @@ class ValidatorTests(unittest.TestCase):
 
 
 class DeepSeekTests(unittest.IsolatedAsyncioTestCase):
+    def test_unstructured_driver_feedback_is_dropped_without_losing_sourced_upgrade(self):
+        raw = extraction().model_dump(mode='json')
+        raw['results'][0]['updates'][0]['driver_feedback'] = ['unsupported feedback string']
+        batch = _validated_response(json.dumps(raw), ExtractionBatch)
+        self.assertEqual(batch.results[0].updates[0].driver_feedback, [])
+        self.assertEqual(batch.results[0].updates[0].component_id, 'floor')
+
     async def test_json_request_and_bearer_header(self):
         seen = {}
 
@@ -483,6 +559,123 @@ class PersistenceTests(unittest.TestCase):
             feed = load_evolution(path, 2026)
             self.assertEqual(feed.upgrades[0].id, 'cadillac-floor')
             self.assertEqual(feed.upgrades[0].change, 'Added a vane to the diffuser sidewall.')
+
+
+class EvolutionAutoReviewTests(unittest.IsolatedAsyncioTestCase):
+    async def test_differently_worded_second_source_merges_into_published_upgrade(self):
+        class Reviewer:
+            async def review_evolution(self, race_id, claims):
+                claim = claims[0]
+                matches = claim['existing_upgrades']
+                return ReviewBatch.model_validate({'verdicts': [{
+                    'event_id': claim['event_id'], 'category': 'upgrade',
+                    'supported': True, 'confidence': .8,
+                    'match_event_id': matches[0]['event_id'] if matches else None,
+                }]})
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            first = source()
+            persist_validated(path, [first], validate_batch(extraction(), [first]).results,
+                              provider='deepseek', model='test', prompt_version='p', pipeline_version='v')
+            reviewer = Reviewer()
+            self.assertEqual((await auto_review_race(path, '2026-1', reviewer))['published'], 1)
+            second = source('src_two')
+            different = extraction(change='The team introduced a revised floor specification',
+                                   source_ids=['src_two'])
+            persist_validated(path, [second], validate_batch(different, [second]).results,
+                              provider='deepseek', model='test', prompt_version='p', pipeline_version='v')
+            result = await auto_review_race(path, '2026-1', reviewer)
+            self.assertEqual(result['merged'], 1)
+            feed = load_evolution(path, 2026)
+            self.assertEqual(len(feed.upgrades), 1)
+            self.assertEqual(len(feed.upgrades[0].sources), 2)
+
+    async def test_conflicted_claim_is_rejected_without_model_guess(self):
+        class Reviewer:
+            async def review_evolution(self, race_id, claims):
+                raise AssertionError('Conflicts must not reach model publication')
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            document = source()
+            first = validate_batch(extraction(), [document])
+            persist_validated(path, [document], first.results, provider='deepseek',
+                              model='test', prompt_version='p', pipeline_version='v')
+            conflicting = validate_batch(extraction(component='other'), [document])
+            persist_validated(path, [document], conflicting.results, provider='deepseek',
+                              model='test', prompt_version='p', pipeline_version='v')
+            result = await auto_review_race(path, '2026-1', Reviewer())
+            self.assertEqual(result['rejected'], 1)
+            self.assertEqual(result['pending'], 0)
+            self.assertEqual(load_evolution(path, 2026).upgrades, [])
+
+    async def test_same_upgrade_from_two_sources_auto_merges(self):
+        class Reviewer:
+            async def review_evolution(self, race_id, claims):
+                return ReviewBatch.model_validate({'verdicts': [
+                    {'event_id': item['event_id'], 'category': 'upgrade',
+                     'supported': True, 'confidence': .8}
+                    for item in claims]})
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            documents = [source(), source('src_two')]
+            validated = validate_batch(extraction(source_ids=['src_one', 'src_two']), documents)
+            persist_validated(path, documents, validated.results, provider='deepseek',
+                              model='test', prompt_version='p', pipeline_version='v')
+            result = await auto_review_race(path, '2026-1', Reviewer())
+            self.assertEqual(result['published'], 1)
+            self.assertEqual(result['merged'], 1)
+            feed = load_evolution(path, 2026)
+            self.assertEqual(len(feed.upgrades), 1)
+            self.assertEqual(len(feed.upgrades[0].sources), 2)
+
+    async def test_supported_claim_publishes_once_with_lower_review_confidence(self):
+        class Reviewer:
+            async def review_evolution(self, race_id, claims):
+                return ReviewBatch.model_validate({'verdicts': [
+                    {'event_id': item['event_id'], 'category': 'upgrade',
+                     'supported': True, 'confidence': .62}
+                    for item in claims]})
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            document = source()
+            validated = validate_batch(extraction(), [document])
+            persist_validated(path, [document], validated.results, provider='deepseek',
+                              model='test', prompt_version='p', pipeline_version='v')
+            first = await auto_review_race(path, '2026-1', Reviewer())
+            second = await auto_review_race(path, '2026-1', Reviewer())
+            self.assertEqual(first['published'], 1)
+            self.assertEqual(second['reviewed'], 0)
+            feed = load_evolution(path, 2026)
+            self.assertEqual(len(feed.upgrades), 1)
+            self.assertEqual(feed.upgrades[0].confidence, '0.62')
+
+    async def test_unsupported_claim_is_rejected_and_never_reopened(self):
+        class Reviewer:
+            async def review_evolution(self, race_id, claims):
+                return ReviewBatch.model_validate({'verdicts': [
+                    {'event_id': item['event_id'], 'category': 'replacement',
+                     'supported': True, 'confidence': .2}
+                    for item in claims]})
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            setup_database(path)
+            document = source()
+            validated = validate_batch(extraction(), [document])
+            persist_validated(path, [document], validated.results, provider='deepseek',
+                              model='test', prompt_version='p', pipeline_version='v')
+            first = await auto_review_race(path, '2026-1', Reviewer())
+            self.assertEqual(first['rejected'], 1)
+            self.assertEqual((await auto_review_race(path, '2026-1', Reviewer()))['reviewed'], 0)
+            self.assertEqual(load_evolution(path, 2026).upgrades, [])
 
 
 if __name__ == '__main__':

@@ -607,6 +607,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get s_2eb56be3c2d9 => '来源';
 
   @override
+  String get s_1535d3d0cead => '此项 AI 判断置信度较低，请核对所附来源。';
+
+  @override
   String get s_0cccd48e35ce => '技术主题';
 
   @override
@@ -1555,6 +1558,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get s_2eb56be3c2d9 => '来源';
+
+  @override
+  String get s_1535d3d0cead => '此项 AI 判断置信度较低，请核对所附来源。';
 
   @override
   String get s_0cccd48e35ce => '技术主题';

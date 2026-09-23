@@ -7,7 +7,10 @@ from pathlib import Path
 
 from app.briefing_worker import execute_briefing
 from app.data_schema import connect
-from app.evolution_worker.sources import OfficialSourceDiscovery, TrustedUrlProvider, publication_phase
+from app.evolution_worker.sources import (
+    OfficialSourceDiscovery, TrustedUrlProvider, eligible_race_day_report,
+    publication_phase,
+)
 from app.evolution_worker.worker import completed_race, race_context, race_window
 
 
@@ -34,20 +37,6 @@ def already_briefed(path: str, season: int, round_number: int) -> bool:
             WHERE s.year=? AND r.round=? LIMIT 1''', (season, round_number)).fetchone() is not None
 
 
-def eligible_supplied_report(document, race_name: str, season: int, race_start) -> bool:
-    """Verify a supplied article is about this race and was published on/after race day."""
-    title = document.title.casefold()
-    url = str(document.url).casefold()
-    report = ('race report' in title and 'grand prix' in title) or (
-        document.source_type == 'formula1_official' and 'what the teams said' in title
-        and 'race day' in title)
-    return (document.source_type in {'formula1_official', 'team_official'}
-            and str(season) in f'{title} {url}' and race_name.split()[0].casefold() in title
-            and report
-            and document.published_at is not None and race_start is not None
-            and document.published_at >= race_start)
-
-
 async def backfill_one(path: str, season: int, round_number: int,
                        supplied: dict[str, list[str]] | None = None,
                        inspect_only: bool = False) -> dict:
@@ -56,14 +45,15 @@ async def backfill_one(path: str, season: int, round_number: int,
         _, race_name = completed_race(path, season, round_number)
         if already_briefed(path, season, round_number):
             return {'race_id': race_id, 'status': 'existing_brief'}
+        race_start, race_end = race_window(path, race_id)
         urls = (supplied.get(race_id, []) if supplied is not None else
-                await OfficialSourceDiscovery().discover(race_id=race_id, **race_context(path, race_id)))
+                await OfficialSourceDiscovery().discover(
+                    race_id=race_id, race_start=race_start, **race_context(path, race_id)))
         if not urls:
             return {'race_id': race_id, 'discovered': 0, 'eligible': 0, 'status': 'no_official_source'}
         collected = await TrustedUrlProvider().collect(race_id, urls)
-        race_start, race_end = race_window(path, race_id)
         eligible = [str(item.url) for item in collected.documents if (
-            eligible_supplied_report(item, race_name, season, race_start) if supplied is not None
+            eligible_race_day_report(item, race_name, season, race_start) if supplied is not None
             else eligible_post_race(item, race_name, race_start, race_end))]
         if not eligible:
             return {'race_id': race_id, 'discovered': len(urls), 'eligible': 0,

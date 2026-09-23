@@ -548,6 +548,14 @@ class _UpgradeDetails extends StatelessWidget {
                   ],
                 ),
               ),
+            if ((double.tryParse(entry.confidence) ?? 1) < 0.75)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  tr(context, 'Low-confidence AI assessment. Check the linked source.'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
           ],
         ),
       ),

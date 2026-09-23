@@ -5,7 +5,7 @@ import socket
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from html.parser import HTMLParser
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
@@ -124,6 +124,23 @@ def publication_phase(published_at: datetime | None, race_start: datetime | None
     if published_at < race_end:
         return 'weekend'
     return 'post_race'
+
+
+def eligible_race_day_report(document: SourceDocument, race_name: str,
+                             season: int, race_start: datetime | None,
+                             aliases: tuple[str, ...] = ()) -> bool:
+    """Select factual race reports or team quotes, never incidental/promotional pages."""
+    title = document.title.casefold()
+    url = str(document.url).casefold()
+    report = ('race report' in title and 'grand prix' in title) or (
+        document.source_type == 'formula1_official' and 'what the teams said' in title
+        and 'race day' in title)
+    places = (race_name.split()[0], *aliases)
+    return (document.source_type in {'formula1_official', 'team_official'}
+            and str(season) in f'{title} {url}'
+            and any(place.casefold() in f'{title} {url}' for place in places if len(place) >= 4)
+            and report and document.published_at is not None and race_start is not None
+            and document.published_at >= race_start)
 
 
 def _host_policy(host: str) -> tuple[int, str] | None:
@@ -305,6 +322,19 @@ class OfficialSourceDiscovery:
     max_candidates = 24
 
     @staticmethod
+    def _priority(url: str) -> int:
+        path = urlsplit(url).path.casefold()
+        if 'what-the-teams-said-race-day' in path or 'race-report' in path:
+            return 0
+        if any(term in path for term in ('upgrade', 'technical', 'tech-talk')):
+            return 1
+        if 'lowdown' in path or 'debrief' in path:
+            return 2
+        if 'preview' in path or 'quiz' in path or 'win-a-' in path:
+            return 9
+        return 3
+
+    @staticmethod
     def _balanced(candidates: list[str], limit: int) -> list[str]:
         groups: dict[str, list[str]] = {}
         for url in dict.fromkeys(candidates):
@@ -336,6 +366,14 @@ class OfficialSourceDiscovery:
         return str(season) in text and (name in text or sum(word in text for word in keywords) >= 2)
 
     @staticmethod
+    def _usable_url(url: str) -> bool:
+        path = urlsplit(url).path.casefold()
+        return not any(term in path for term in (
+            'quiz', 'predictions', 'in-pictures', 'weather-forecast',
+            'win-a-', 'signed-tee', 'tickets', 'merchandise',
+        ))
+
+    @staticmethod
     def _candidate_matches(url: str, label: str, keywords: set[str], season: int) -> bool:
         haystack = f'{url} {label}'.casefold()
         years = set(re.findall(r'20\d{2}', haystack))
@@ -364,7 +402,8 @@ class OfficialSourceDiscovery:
             return []
 
     async def discover(self, *, race_id: str, race_name: str, circuit: str | None = None,
-                       country: str | None = None, city: str | None = None) -> list[str]:
+                       country: str | None = None, city: str | None = None,
+                       race_start: datetime | None = None) -> list[str]:
         keywords = self._keywords(race_name, circuit, country, city)
         if not keywords:
             return []
@@ -382,7 +421,7 @@ class OfficialSourceDiscovery:
                 except (httpx.HTTPError, ValueError):
                     links = []
                 for url, label in links:
-                    if self._candidate_matches(url, label, keywords, season):
+                    if self._usable_url(url) and self._candidate_matches(url, label, keywords, season):
                         candidates.append(url)
                 host = urlsplit(seed).hostname
                 if host:
@@ -395,14 +434,47 @@ class OfficialSourceDiscovery:
                             xml.raise_for_status()
                             if len(xml.content) > MAX_BODY_BYTES:
                                 continue
-                            candidates.extend(url for url in re.findall(r'<loc>([^<]+)</loc>', xml.text)
-                                              if self._candidate_matches(url, '', keywords, season))
+                            if source_type == 'formula1_official':
+                                index = next((url for url in re.findall(r'<loc>([^<]+)</loc>', xml.text)
+                                              if url.endswith('/en/latest/article/sitemap.xml')), None)
+                                if index:
+                                    index_url, _, _ = validate_public_url(index, self.resolver)
+                                    xml = await client.get(index_url, headers={'User-Agent': USER_AGENT})
+                                    xml.raise_for_status()
+                                    if len(xml.content) > MAX_BODY_BYTES:
+                                        continue
+                                    sitemap_url = index_url
+                            locations = re.findall(r'<loc>([^<]+)</loc>', xml.text)
+                            if sitemap_url.endswith('/en/latest/article/sitemap.xml'):
+                                # Formula1.com exposes an index of 1000-article sitemaps.
+                                # The latest eight cover current and recent-season reports.
+                                for child in locations[-8:]:
+                                    try:
+                                        child_url, _, child_type = validate_public_url(child, self.resolver)
+                                        if child_type != 'formula1_official':
+                                            continue
+                                        page = await client.get(child_url, headers={'User-Agent': USER_AGENT})
+                                        page.raise_for_status()
+                                        if len(page.content) <= MAX_BODY_BYTES:
+                                            candidates.extend(url for url in re.findall(
+                                                r'<loc>([^<]+)</loc>', page.text)
+                                                if self._usable_url(url) and
+                                                self._candidate_matches(url, '', keywords, season))
+                                    except (httpx.HTTPError, ValueError):
+                                        continue
+                            else:
+                                candidates.extend(url for url in locations
+                                                  if self._usable_url(url) and
+                                                  self._candidate_matches(url, '', keywords, season))
                         except (httpx.HTTPError, ValueError):
                             continue
-            selected = self._balanced(candidates, self.max_candidates)
+            selected = self._balanced(sorted(candidates, key=self._priority), self.max_candidates)
             documents = await TrustedUrlProvider(client, self.resolver).collect(race_id, selected)
             return [str(item.url) for item in documents.documents
-                    if self._is_relevant(item, race_name, keywords, season)]
+                    if self._is_relevant(item, race_name, keywords, season)
+                    and (race_start is None or (item.published_at is not None
+                         and race_start - timedelta(days=7) <= item.published_at
+                         <= race_start + timedelta(days=7)))]
         finally:
             if owns_client:
                 await client.aclose()

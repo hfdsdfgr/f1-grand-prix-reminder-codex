@@ -13,6 +13,7 @@ from typing import Awaitable, Callable
 from app.data_schema import connect, migrate
 from app.briefing_worker import execute_briefing
 from app.evolution_worker.worker import execute_discovered_evolution
+from app.evolution_worker.auto_review import auto_review_race
 
 
 logger = logging.getLogger('post_race')
@@ -157,10 +158,13 @@ class PostRaceOrchestrator:
             db.close()
 
     async def _run_evolution(self, public_race_id: str, stage: str) -> dict:
-        return await execute_discovered_evolution(self.path, public_race_id)
+        result = await execute_discovered_evolution(self.path, public_race_id)
+        result['auto_review'] = await auto_review_race(self.path, public_race_id)
+        return result
 
     async def _run_briefing(self, public_race_id: str, stage: str) -> dict:
-        return await execute_briefing(self.path, public_race_id)
+        return await execute_briefing(self.path, public_race_id,
+                                      allow_race_day_sources=True)
 
     async def _execute(self, job, now: datetime) -> None:
         job_id, public_id, worker_type, stage = job

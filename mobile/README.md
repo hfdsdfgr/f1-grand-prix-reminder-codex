@@ -27,7 +27,9 @@ The v1.0 release permits cleartext HTTP only to `8.134.70.237` through a
 release-specific Android network security configuration. Other release HTTP
 destinations remain blocked. The backend currently uses HTTP over a public IP;
 HTTPS/domain deployment is deferred to the post-v1.0 deployment backlog.
-Evolution technical claims still require human review before publication.
+Evolution technical claims are published after source-evidence validation and
+an independent model review. Unsupported claims are rejected, and lower-confidence
+published claims are labeled in the app.
 
 ## Android release
 

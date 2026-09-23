@@ -233,6 +233,7 @@ const chineseTranslations = {
   'No verified briefing is available for this race.': '本站暂无可核验的赛后简报。',
   'No completed race is available for briefing.': '暂无已结束的比赛可供查看赛后简报。',
   'Sources': '来源',
+  'Low-confidence AI assessment. Check the linked source.': '此项 AI 判断置信度较低，请核对所附来源。',
   'Technical themes': '技术主题',
   'Team performance': '车队表现',
   'Tyre issues': '轮胎问题',

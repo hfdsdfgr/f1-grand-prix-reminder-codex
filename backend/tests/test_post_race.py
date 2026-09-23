@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 from app.data_schema import connect
 from app.models import RaceFeed
@@ -32,6 +33,23 @@ def jobs(path: str):
 
 
 class PostRaceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_default_workers_use_discovery_and_model_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = f'{directory}/db.sqlite'
+            database(path, completed=True)
+            orchestrator = PostRaceOrchestrator(path)
+            with patch('app.post_race.execute_discovered_evolution', new_callable=AsyncMock,
+                       return_value={'sources': []}) as evolution, patch(
+                           'app.post_race.auto_review_race', new_callable=AsyncMock,
+                           return_value={'published': 0}) as reviewer, patch(
+                           'app.post_race.execute_briefing', new_callable=AsyncMock,
+                           return_value={'sources': []}) as briefing:
+                await orchestrator._run_evolution('2026-1', 'initial')
+                await orchestrator._run_briefing('2026-1', 'initial')
+            evolution.assert_awaited_once_with(path, '2026-1')
+            reviewer.assert_awaited_once_with(path, '2026-1')
+            briefing.assert_awaited_once_with(path, '2026-1', allow_race_day_sources=True)
+
     async def test_unfinished_race_does_not_create_jobs(self):
         with tempfile.TemporaryDirectory() as directory:
             path = f'{directory}/db.sqlite'

@@ -7,7 +7,10 @@ from contextlib import closing
 from app.data_schema import connect, migrate, new_id, utc_now
 from app.evolution_worker.llm import DeepSeekProvider, LLMProvider
 from app.evolution_worker.models import BriefingFact, SourceDocument
-from app.evolution_worker.sources import OfficialSourceDiscovery, TrustedUrlProvider, publication_phase
+from app.evolution_worker.sources import (
+    OfficialSourceDiscovery, TrustedUrlProvider, eligible_race_day_report,
+    publication_phase,
+)
 from app.evolution_worker.worker import race_context, race_window
 
 
@@ -130,7 +133,9 @@ async def execute_briefing(path: str, race_id: str, urls: list[str] | None = Non
     """Run automatic official discovery, or explicit URLs for debug/replay."""
     migrate(path)
     if urls is None:
-        urls = await OfficialSourceDiscovery().discover(race_id=race_id, **race_context(path, race_id))
+        race_start, _ = race_window(path, race_id)
+        urls = await OfficialSourceDiscovery().discover(
+            race_id=race_id, race_start=race_start, **race_context(path, race_id))
     if not urls:
         return {'race_id': race_id, 'sources': [], 'provider_failures': [],
                 'persistence': {'inserted': 0, 'observed': 0, 'status': 'no_official_source'}}
@@ -144,6 +149,13 @@ async def execute_briefing(path: str, race_id: str, urls: list[str] | None = Non
         # Historical race reports are often published before the +4h fallback finish.
         phases.add('weekend')
     collection.documents = [item for item in collection.documents if item.publication_phase in phases]
+    if allow_race_day_sources:
+        context = race_context(path, race_id)
+        season = int(race_id.split('-', 1)[0])
+        collection.documents = [item for item in collection.documents
+                                if eligible_race_day_report(
+                                    item, context['race_name'], season, race_start,
+                                    (context['country'] or '', context['city'] or ''))]
     if not collection.documents:
         return {'race_id': race_id, 'sources': [], 'provider_failures': collection.failures,
                 'persistence': {'inserted': 0, 'observed': 0, 'status': 'no_post_race_source'}}
