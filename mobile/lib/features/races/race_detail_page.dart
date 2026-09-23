@@ -50,6 +50,7 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
   StrategyFeed? _savedStrategy;
   Future<ChampionshipImpactFeed>? _impactRequest;
   ChampionshipImpactFeed? _savedImpact;
+  int? _selectedTurn;
 
   Future<ResultsFeed> _load() => _requests.putIfAbsent(
     _qualifying,
@@ -126,24 +127,10 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                   ),
                   if (race.circuitLayout case final layout?) ...[
                     const SizedBox(height: 24),
-                    Semantics(
-                      image: true,
-                      label:
-                          '${tr(context, race.circuit)} ${tr(context, 'circuit layout')}',
-                      child: ExcludeSemantics(
-                        child: SizedBox(
-                          height: 220,
-                          width: double.infinity,
-                          child: SvgPicture.asset(
-                            layout.assetPath,
-                            fit: BoxFit.contain,
-                            colorFilter: ColorFilter.mode(
-                              Theme.of(context).colorScheme.onSurface,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                        ),
-                      ),
+                    _CircuitLayoutView(
+                      layout: layout,
+                      circuit: tr(context, race.circuit),
+                      selectedTurn: _selectedTurn,
                     ),
                     Text(
                       [
@@ -337,6 +324,9 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                 _RaceStory(
                   future: _loadStory(),
                   saved: _savedStory,
+                  layout: widget.race.circuitLayout,
+                  onTurnSelected: (turn) =>
+                      setState(() => _selectedTurn = turn),
                   onSaved: (story) => _savedStory = story,
                   onRetry: _refreshStory,
                 ),
@@ -401,14 +391,89 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
   );
 }
 
+class _CircuitLayoutView extends StatelessWidget {
+  final CircuitLayout layout;
+  final String circuit;
+  final int? selectedTurn;
+  const _CircuitLayoutView({
+    required this.layout,
+    required this.circuit,
+    required this.selectedTurn,
+  });
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final side = constraints.maxWidth < 220 ? constraints.maxWidth : 220.0;
+      final left = (constraints.maxWidth - side) / 2;
+      final top = (220 - side) / 2;
+      return SizedBox(
+        height: 220,
+        width: double.infinity,
+        child: Stack(
+          children: [
+            Semantics(
+              image: true,
+              label: '$circuit ${tr(context, 'circuit layout')}',
+              child: ExcludeSemantics(
+                child: SvgPicture.asset(
+                  layout.assetPath,
+                  fit: BoxFit.contain,
+                  width: constraints.maxWidth,
+                  height: 220,
+                  colorFilter: ColorFilter.mode(
+                    Theme.of(context).colorScheme.onSurface,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
+            ),
+            for (final corner in layout.corners)
+              Positioned(
+                left: left + side * corner.x / 500 - 13,
+                top: top + side * corner.y / 500 - 13,
+                child: Semantics(
+                  label: '${corner.name} ${corner.turnNumber}',
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: corner.turnNumber == selectedTurn
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.surface,
+                    ),
+                    child: Text(
+                      '${corner.turnNumber}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: corner.turnNumber == selectedTurn
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
 class _RaceStory extends StatelessWidget {
   final Future<RaceStoryFeed> future;
   final RaceStoryFeed? saved;
+  final CircuitLayout? layout;
+  final ValueChanged<int> onTurnSelected;
   final ValueChanged<RaceStoryFeed> onSaved;
   final VoidCallback onRetry;
   const _RaceStory({
     required this.future,
     required this.saved,
+    required this.layout,
+    required this.onTurnSelected,
     required this.onSaved,
     required this.onRetry,
   });
@@ -448,7 +513,12 @@ class _RaceStory extends StatelessWidget {
           const SizedBox(height: 12),
           if (story.events.isEmpty)
             Text(tr(context, 'Race story is not available yet.')),
-          for (final event in story.events) _StoryEvent(event: event),
+          for (final event in story.events)
+            _StoryEvent(
+              event: event,
+              corner: layout?.cornerForTurn(event.turnNumber),
+              onTurnSelected: onTurnSelected,
+            ),
         ],
       );
     },
@@ -457,12 +527,21 @@ class _RaceStory extends StatelessWidget {
 
 class _StoryEvent extends StatelessWidget {
   final RaceStoryEvent event;
-  const _StoryEvent({required this.event});
+  final CircuitCorner? corner;
+  final ValueChanged<int> onTurnSelected;
+  const _StoryEvent({
+    required this.event,
+    required this.corner,
+    required this.onTurnSelected,
+  });
 
   @override
   Widget build(BuildContext context) => Semantics(
     container: true,
-    label: '${tr(context, _storyTitle(event.kind))}, ${event.driver}',
+    label:
+        '${tr(context, _storyTitle(event.kind))}, ${event.driver}'
+        '${corner == null ? '' : ', ${corner!.name} ${corner!.turnNumber}'}',
+    onTap: corner == null ? null : () => onTurnSelected(corner!.turnNumber),
     child: ExcludeSemantics(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -490,6 +569,11 @@ class _StoryEvent extends StatelessWidget {
                     ),
                   if (event.lap != null)
                     Text('${tr(context, 'Lap')} ${event.lap} · ${event.time}'),
+                  if (corner case final mapped?)
+                    TextButton(
+                      onPressed: () => onTurnSelected(mapped.turnNumber),
+                      child: Text('${mapped.name} ${mapped.turnNumber}'),
+                    ),
                 ],
               ),
             ),

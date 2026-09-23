@@ -7,6 +7,7 @@ The app calls only the configured API_BASE_URL, never third-party F1 APIs direct
 
 - `development` is the default and uses the local Backend at `http://127.0.0.1:8000`.
 - `test` uses the ECS Nginx endpoint at `http://8.134.70.237`.
+- `production` requires an HTTPS domain passed as `API_BASE_URL`.
 - `API_BASE_URL` can override either environment for a one-off local test.
 
 Examples:
@@ -24,3 +25,16 @@ Examples:
 
 The HTTP exception is debug-only while the test Backend has no domain or TLS.
 Use an HTTPS domain before any release/profile distribution.
+
+## Android release
+
+From the repository root, run `scripts/init-release-signing.ps1` once. Back up
+`mobile/android/app/grandprix-upload.jks` and `mobile/android/key.properties`
+securely; both are ignored by Git and are needed to sign future updates.
+After the domain has a valid HTTPS certificate and `/health` responds, run:
+
+```powershell
+.\scripts\build-release.ps1 -ProductionApiUrl https://your-domain.example
+```
+
+The script builds a signed release APK and AAB with the production API origin.

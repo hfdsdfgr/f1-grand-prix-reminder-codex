@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from app.data_schema import (
     PROVIDER_ID, connect, migrate, new_id, record_provider_health, store_raw,
 )
-from app.models import RaceFeed
+from app.models import CircuitCorner, RaceFeed
 from app.circuit_layouts import circuit_layout
 from app.providers.jolpica import fetch_season
 
@@ -88,6 +88,14 @@ class ScheduleRepository:
                         (PROVIDER_ID, external_circuit, circuit_id, now, now, 'high', 'active'))
                 layout = circuit_layout(external_circuit, race.season) or race.circuit_layout
                 if layout:
+                    corners = [CircuitCorner(turn_number=turn, name=name,
+                                             x=x, y=y, source=source)
+                               for turn, name, x, y, source in db.execute('''
+                                   SELECT turn_number,display_name,label_x,label_y,source_url
+                                   FROM circuit_annotations
+                                   WHERE layout_id=? AND turn_number IS NOT NULL
+                                   ORDER BY turn_number''', (layout.id,))]
+                    layout = layout.model_copy(update={'corners': corners})
                     db.execute('''INSERT INTO circuit_layouts
                         (layout_id,circuit_id,valid_from,valid_to,asset_path,view_box,
                          turns,source_url,source_license,verified_at)

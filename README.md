@@ -73,7 +73,7 @@ cd ../mobile
 - `backend/app/providers`：读取第三方赛历、校验并转换为内部模型。
 - `backend/app/data_schema.py`：完整 SQLite Schema、版本迁移、原始来源和 Provider 健康状态。
 - `backend/app/repositories`：持久化规范化赛历实体、身份映射和赛程修订，并维护兼容缓存；当季缓存 1 小时、历史赛季 24 小时。
-- `mobile/lib/features`：Home、Races 功能；AI/3D 在 App shell 中保留轻量占位。
+- `mobile/lib/features`：Home、Races、Briefing、Evolution 和交互式赛车视图。
 - `mobile/lib/data`：客户端内部模型及后端访问；不接触上游 schema。
 - `mobile/lib/core/theme.dart` 和 `docs/design.md`：信息层级、配色、字体与间距规范。
 
@@ -84,4 +84,4 @@ cd ../mobile
 
 GitHub token 已由 Git Credential Manager 保存在系统凭据存储，原明文文件已删除。
 使用凭据管理器读取凭据，保持 token 不进入代码、日志或提交。
-本目录现为独立 Git 仓库，尚未设置 GitHub remote 或推送。
+正式构建说明见 `mobile/README.md`；release keystore 和密码文件只保存在本机且被 Git 忽略。

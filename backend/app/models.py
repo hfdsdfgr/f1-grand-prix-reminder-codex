@@ -27,6 +27,14 @@ class RaceSummary(BaseModel):
     fastest_lap_number: int | None = None
 
 
+class CircuitCorner(BaseModel):
+    turn_number: int = Field(ge=1)
+    name: str
+    x: float = Field(ge=0, le=500)
+    y: float = Field(ge=0, le=500)
+    source: HttpUrl
+
+
 class CircuitLayout(BaseModel):
     id: str
     asset_path: str
@@ -34,6 +42,7 @@ class CircuitLayout(BaseModel):
     turns: int | None = None
     source: HttpUrl
     license: str
+    corners: list[CircuitCorner] = Field(default_factory=list)
 
 
 class Race(BaseModel):

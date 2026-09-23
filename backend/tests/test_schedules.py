@@ -12,6 +12,7 @@ from app.lifecycle import with_lifecycle
 from app.models import RaceFeed
 from app.providers.jolpica import normalize
 from app.repositories.schedules import ScheduleRepository
+from app.circuit_layouts import circuit_layout
 
 
 def sample():
@@ -24,6 +25,18 @@ def sample():
 
 
 class ScheduleTests(unittest.TestCase):
+    def test_all_2026_race_circuits_have_versioned_svg_layouts(self):
+        circuits = ('albert_park', 'shanghai', 'suzuka', 'miami', 'villeneuve',
+                    'monaco', 'catalunya', 'red_bull_ring', 'silverstone', 'spa',
+                    'hungaroring', 'zandvoort', 'monza', 'madring', 'baku',
+                    'sepang', 'marina_bay', 'americas', 'rodriguez',
+                    'interlagos', 'vegas', 'losail', 'yas_marina')
+        layouts = [circuit_layout(circuit, 2026) for circuit in circuits]
+        self.assertTrue(all(layouts))
+        self.assertEqual(len({layout.id for layout in layouts}), len(circuits))
+        self.assertIsNone(circuit_layout('madring', 2025))
+        self.assertIsNone(circuit_layout('catalunya', 2022))
+
     def test_lifecycle_uses_session_times_without_changing_schedule(self):
         raw = sample()
         raw['FirstPractice'] = {'date': '2026-03-06', 'time': '02:00:00Z'}
@@ -69,6 +82,20 @@ class ScheduleTests(unittest.TestCase):
                 stored = db.execute('''SELECT source_license, turns
                     FROM circuit_layouts WHERE layout_id='suzuka-2' ''').fetchone()
             self.assertEqual(stored, ('CC BY 4.0', 18))
+
+    def test_only_sourced_corner_coordinates_are_exposed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            raw = sample()
+            raw['Circuit']['circuitId'] = 'suzuka'
+            repo = ScheduleRepository(f'{directory}/cache.db')
+            feed = RaceFeed(races=[normalize(raw)], updated_at=datetime.now(timezone.utc))
+            self.assertEqual(repo._persist(feed).races[0].circuit_layout.corners, [])
+            with closing(sqlite3.connect(repo.path)) as db, db:
+                db.execute('''INSERT INTO circuit_annotations
+                    (annotation_id,layout_id,turn_number,display_name,label_x,label_y,source_url)
+                    VALUES ('test_turn','suzuka-2',1,'Turn',250,150,'https://example.com/map')''')
+            corner = repo._persist(feed).races[0].circuit_layout.corners[0]
+            self.assertEqual((corner.turn_number, corner.x, corner.y), (1, 250, 150))
 
     def test_normalization_and_unknown_time(self):
         race = normalize(sample())

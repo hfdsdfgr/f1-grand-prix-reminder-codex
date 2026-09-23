@@ -119,7 +119,33 @@ Map<String, dynamic> championshipImpactFeed() => {
 };
 
 void main() {
-  final dispatcher = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
+  test('race moment maps only to a sourced corner of the selected layout', () {
+    final layout = CircuitLayout({
+      'id': 'suzuka-2',
+      'asset_path': 'assets/circuits/suzuka-2.svg',
+      'valid_from': 2022,
+      'source': 'https://github.com/f1db/f1db',
+      'license': 'CC BY 4.0',
+      'corners': [
+        {
+          'turn_number': 7,
+          'name': 'Dunlop',
+          'x': 200,
+          'y': 300,
+          'source': 'https://example.com/sourced-map',
+        },
+      ],
+    });
+    final moment = RaceStoryEvent({
+      'kind': 'finish',
+      'driver': 'Test Driver',
+      'turn_number': 7,
+    });
+    expect(layout.cornerForTurn(moment.turnNumber)?.name, 'Dunlop');
+    expect(layout.cornerForTurn(8), isNull);
+  });
+  final dispatcher =
+      TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
   dispatcher.localeTestValue = const Locale('zh', 'CN');
   dispatcher.localesTestValue = const [Locale('zh', 'CN')];
   testWidgets('post-race detail reveals a hidden session on demand', (

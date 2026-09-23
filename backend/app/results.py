@@ -66,6 +66,7 @@ class RaceStoryEvent(BaseModel):
     finish_position: int | None = None
     lap: int | None = None
     time: str | None = None
+    turn_number: int | None = Field(default=None, ge=1)
 
 
 class RaceStory(BaseModel):

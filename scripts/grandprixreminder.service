@@ -1,6 +1,6 @@
 [Unit]
-Description=GrandPrixReminder post-race scheduler
-After=network-online.target grandprixreminder.service
+Description=GrandPrixReminder FastAPI backend
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -12,9 +12,9 @@ NoNewPrivileges=true
 WorkingDirectory=/opt/grandprixreminder/backend
 Environment=DATABASE_PATH=/opt/grandprixreminder/backend/data/schedules.db
 EnvironmentFile=/etc/grandprixreminder.env
-ExecStart=/opt/grandprixreminder/backend/venv/bin/python -m app.post_race_scheduler
+ExecStart=/opt/grandprixreminder/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
-RestartSec=10
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

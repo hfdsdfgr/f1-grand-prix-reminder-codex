@@ -3,10 +3,16 @@ import 'package:grand_prix_reminder/core/api_config.dart';
 
 void main() {
   test('selects the configured backend environment', () {
-    final isTest = ApiConfig.environment == ApiConfig.test;
-    expect(
-      ApiConfig.baseUrl,
-      isTest ? ApiConfig.testBaseUrl : ApiConfig.developmentBaseUrl,
-    );
+    expect(ApiConfig.baseUrl, switch (ApiConfig.environment) {
+      ApiConfig.test => ApiConfig.testBaseUrl,
+      ApiConfig.production => const String.fromEnvironment('API_BASE_URL'),
+      _ => ApiConfig.developmentBaseUrl,
+    });
+    if (ApiConfig.environment == ApiConfig.production &&
+        ApiConfig.baseUrl.isEmpty) {
+      expect(() => ApiConfig.validate(), throwsStateError);
+    } else {
+      expect(ApiConfig.validate, returnsNormally);
+    }
   });
 }

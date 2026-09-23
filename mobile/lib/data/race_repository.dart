@@ -36,13 +36,37 @@ class CircuitLayout {
   final String id, assetPath, source, license;
   final int validFrom;
   final int? turns;
+  final List<CircuitCorner> corners;
   CircuitLayout(Map<String, dynamic> json)
     : id = json['id'] as String,
       assetPath = json['asset_path'] as String,
       validFrom = json['valid_from'] as int,
       source = json['source'] as String,
       license = json['license'] as String,
-      turns = json['turns'] as int?;
+      turns = json['turns'] as int?,
+      corners = (json['corners'] as List<dynamic>? ?? const [])
+          .map((item) => CircuitCorner(item as Map<String, dynamic>))
+          .toList();
+
+  CircuitCorner? cornerForTurn(int? turnNumber) {
+    if (turnNumber == null) return null;
+    for (final corner in corners) {
+      if (corner.turnNumber == turnNumber) return corner;
+    }
+    return null;
+  }
+}
+
+class CircuitCorner {
+  final int turnNumber;
+  final String name, source;
+  final double x, y;
+  CircuitCorner(Map<String, dynamic> json)
+    : turnNumber = json['turn_number'] as int,
+      name = json['name'] as String,
+      source = json['source'] as String,
+      x = (json['x'] as num).toDouble(),
+      y = (json['y'] as num).toDouble();
 }
 
 class Race {
@@ -405,7 +429,7 @@ class ResultsFeed {
 
 class RaceStoryEvent {
   final String kind, driver;
-  final int? gridPosition, finishPosition, lap;
+  final int? gridPosition, finishPosition, lap, turnNumber;
   final String? time;
   RaceStoryEvent(Map<String, dynamic> json)
     : kind = json['kind'] as String,
@@ -413,6 +437,7 @@ class RaceStoryEvent {
       gridPosition = json['grid_position'] as int?,
       finishPosition = json['finish_position'] as int?,
       lap = json['lap'] as int?,
+      turnNumber = json['turn_number'] as int?,
       time = json['time'] as String?;
 }
 
