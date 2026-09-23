@@ -18,6 +18,7 @@ from app.results import (
 )
 from app.localization import upsert_translation
 from app.repositories.schedules import ScheduleRepository
+from app.production_bootstrap import bootstrap
 from test_schedules import sample
 
 
@@ -27,6 +28,59 @@ def row(**overrides):
 
 
 class ResultsTests(unittest.TestCase):
+    def test_production_bootstrap_repeats_without_duplicate_entities(self):
+        first = sample()
+        first['Circuit']['circuitId'] = 'albert_park'
+        second = sample()
+        second['round'] = '2'
+        second['date'] = '2026-03-15'
+        second['Circuit']['circuitId'] = 'albert_park'
+        driver = {'driverId': 'test-driver', 'givenName': 'Test',
+                  'familyName': 'Driver', 'permanentNumber': '42'}
+        team = {'constructorId': 'test-team', 'name': 'Test Team'}
+        standings = [{'Driver': driver, 'Constructors': [team]}]
+        entries = [row(Driver=driver, Constructor=team, grid='1')]
+        now = datetime(2026, 4, 1, tzinfo=timezone.utc)
+
+        def fetch(_season, _round, kind):
+            return normalize_results(entries, f'https://example.com/{kind}', kind)
+
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('app.repositories.schedules.fetch_season',
+                      return_value=[normalize(first), normalize(second)]) as schedule_fetch, \
+                patch('app.results.fetch_driver_standings',
+                      return_value=standings) as roster_fetch, \
+                patch('app.results.fetch_results', side_effect=fetch) as result_fetch:
+            path = f'{directory}/data.db'
+            first_run = bootstrap(2026, path, now)
+            with closing(sqlite3.connect(path)) as db:
+                tables = ('seasons', 'teams', 'drivers', 'driver_team_assignments',
+                          'circuits', 'circuit_layouts', 'races', 'sessions',
+                          'race_entries', 'qualifying_results', 'starting_grids',
+                          'race_results', 'result_cache')
+                counts = {table: db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
+                          for table in tables}
+            second_run = bootstrap(2026, path, now)
+            with closing(sqlite3.connect(path)) as db:
+                repeated = {table: db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
+                            for table in tables}
+                grids = list(db.execute('SELECT qualifying_position,grid_position FROM starting_grids'))
+                foreign_keys = list(db.execute('PRAGMA foreign_key_check'))
+
+        self.assertEqual(first_run, second_run)
+        self.assertEqual(first_run['races'], 2)
+        self.assertEqual(first_run['drivers'], 1)
+        self.assertEqual(len(first_run['completed']), 2)
+        self.assertEqual(counts, repeated)
+        self.assertEqual(counts['race_results'], 2)
+        self.assertEqual(counts['qualifying_results'], 2)
+        self.assertEqual(counts['driver_team_assignments'], 3)
+        self.assertEqual(grids, [(1, 1), (1, 1)])
+        self.assertEqual(foreign_keys, [])
+        self.assertEqual(schedule_fetch.call_count, 1)
+        self.assertEqual(roster_fetch.call_count, 1)
+        self.assertEqual(result_fetch.call_count, 4)
+
     def test_briefing_exposes_stored_insights_only_with_original_sources(self):
         with tempfile.TemporaryDirectory() as directory:
             path = f'{directory}/data.db'

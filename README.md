@@ -70,6 +70,15 @@ cd ../mobile
 ../.tools/flutter/bin/flutter.bat test
 ```
 
+生产赛季数据可在备份数据库后重复初始化：
+
+```bash
+python -m app.production_bootstrap --season 2026 --database /opt/grandprixreminder/backend/data/schedules.db
+```
+
+该命令只调用现有赛历、车手阵容、排位和正赛成绩 Repository；
+Briefing 与 Evolution 继续由各自的来源和审核流程管理。
+
 ## 结构与约定
 
 - `backend/app/providers`：读取第三方赛历、校验并转换为内部模型。
