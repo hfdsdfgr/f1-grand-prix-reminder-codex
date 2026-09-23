@@ -1,69 +1,107 @@
 # GrandPrixReminder
 
-GrandPrixReminder 是一款面向 F1 比赛周末的 Android 赛事助手。它把赛历、成绩、赛后 Briefing 和赛车技术演进放在同一条分站时间线上。当前版本为 **v1.0.0**，Android 真机验收已通过。
+### Race. Debrief. Evolution.
 
-## 你可以做什么
+An Android companion for the F1 race weekend: know when the next race starts, read source-linked post-race briefings, and explore a team's published technical upgrades.
 
-- 在 Home 查看下一场比赛、倒计时、周末 Sessions，并设置赛前 24 小时、1 小时、15 分钟或自定义提醒。
-- 在 Calendar 和 GP Detail 查看赛季赛程、比赛状态、成绩与赛道轮廓；结果页支持无剧透模式。
-- 阅读来自赛后报道的结构化 Briefing，以及车队、部件、生命周期明确的 Evolution 升级历程。
-- 在 Evolution 3D Car Explorer 旋转、缩放、切换视角、展开部件，并从部件或时间线打开对应升级及来源；Ghost Compare 可比较两站车辆规格。
-- 在设置中切换简体中文 / English，关注车手与车队。语言、关注、无剧透和提醒设置保存在本机。
+**Android · v1.0.0** · [简体中文](README.zh-CN.md)
 
-Flutter 客户端只连接本项目的 FastAPI API。Backend 汇集赛历与结果，并在比赛结束后按既定时序自动发现来源、生成 Briefing 和 Evolution。Evolution 事实先经过证据校验，再由独立模型复核；未获支持的内容不会发布。每条公开升级保留原始来源，低置信度内容在 App 中提示。**模型复核不能保证内容绝对正确。** 找不到合格技术来源时，对应分站可能没有 Evolution 条目。
+## Download
 
-## 安装 Android v1.0.0
+[Download the v1.0.0 APK](https://github.com/hfdsdfgr/f1-grand-prix-reminder-codex/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk) · [Release notes](docs/release-notes-v1.0.0.md)
 
-构建产物位于：
+The Release is published in a **private GitHub repository**. Download access currently requires repository permission.
 
-- `mobile/build/release-candidate/GrandPrixReminder-v1.0.0.apk`
-- `mobile/build/release-candidate/GrandPrixReminder-v1.0.0.aab`（留作后续分发，不直接安装）
+## Product Preview
 
-将 APK 复制到 Android 手机后打开安装。若手机上已有**同一签名**的正式测试包，Android 可以尝试覆盖更新；若旧包是 Debug 签名，系统会拒绝覆盖。不要为了安装而直接清除应用数据：卸载会移除本机的关注、语言和提醒设置。
+These are screenshots from the running Android app. The 3D car is a technical illustration, with team-inspired colors rather than an official livery.
 
-## 本地运行与检查（Windows PowerShell）
+| Home | Races | Briefing | 3D Explorer |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/home.jpg" width="180" alt="Next Grand Prix and countdown"> | <img src="docs/screenshots/races.jpg" width="180" alt="2026 race calendar and results"> | <img src="docs/screenshots/briefing.jpg" width="180" alt="Source-linked Spanish Grand Prix briefing"> | <img src="docs/screenshots/explorer.jpg" width="180" alt="Interactive 3D car with component controls"> |
 
-```powershell
-py -3 -m venv backend/.venv
-backend/.venv/Scripts/python -m pip install -r backend/requirements.txt
-cd backend
-.venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+The gallery covers Home, Races, Briefing and the 3D Explorer. A separate Evolution upgrade-timeline screenshot remains on the [screenshot checklist](docs/screenshots/README.md).
+
+## Features
+
+- **Race weekend:** next Grand Prix, local start time, countdown, sessions, calendar, circuit layout and structured results.
+- **Reminders:** local notifications with 24-hour, 1-hour, 15-minute and custom lead times, subject to Android notification permissions.
+- **Personal controls:** spoiler-free results, local driver/team follows, and persistent English / Simplified Chinese selection.
+- **Resilient reading:** loading, empty and error states; cached race data is marked stale when appropriate.
+
+## Briefing
+
+Post-race Briefing organizes sourced driver and team information by topic, including strategy, tyres, incidents and future expectations when evidence is available. Each item retains a path to its original source. Structured race results come from data providers; language models process article and interview text, not race classification.
+
+## Evolution / 3D Explorer
+
+Evolution connects published upgrades to a team, race, component, lifecycle and original evidence. Select a car to read its season timeline, then select a component to inspect a linked upgrade. The viewer supports rotation, zoom, preset angles, exploded and technical views. Comparison controls use available race specifications; distinct 3D geometry is shown only when verified model assets exist.
+
+The current shared car geometry is an **illustration**, not a CAD reconstruction of each team's car. Team car names and official links identify the real car; colors are visual cues, not official liveries. Lower-confidence published claims carry a notice, and the source remains available for inspection.
+
+## Architecture
+
+Race times, calendar and results follow structured-provider paths. Article-derived Briefing and Evolution use the post-race processing path.
+
+```mermaid
+flowchart LR
+    SP[Structured providers<br/>Jolpica and FastF1] --> DB[(Race data and results)]
+    OS[Official F1 and team pages] --> SD[Official source discovery]
+    SCH[Post-race scheduler] --> BW[Briefing worker]
+    SCH --> EW[Evolution worker]
+    SD --> BW
+    SD --> EW
+    BW --> DS[DeepSeek extraction]
+    EW --> DS
+    DS --> VAL[Source and evidence checks]
+    VAL --> BF[Briefing facts]
+    VAL --> CL[EvidenceAnchor and Claim]
+    CL --> MR[Independent model review]
+    BF --> DB
+    MR --> DB
+    DB --> API[FastAPI]
+    API --> NX[Nginx]
+    NX --> APP[Flutter Android app]
+    APP --> VIEW[3D Explorer]
 ```
 
-新终端运行 Flutter；仓库忽略的 `.tools/flutter` 也可替换为已安装的 Flutter SDK：
+The Evolution evidence path keeps factual identity separate from presentation language:
 
-```powershell
-cd mobile
-../.tools/flutter/bin/flutter.bat pub get
-../.tools/flutter/bin/flutter.bat run
+```mermaid
+flowchart LR
+    URL[Official page URL] --> FETCH[Fetch and clean]
+    FETCH --> SOURCE[SourceDocument / revision]
+    SOURCE --> LLM[DeepSeek extraction]
+    LLM --> VALID[Validator]
+    VALID --> ANCHOR[EvidenceAnchor]
+    ANCHOR --> CLAIM[Claim and Upgrade]
+    CLAIM --> REVIEW[Independent model review]
+    REVIEW -->|supported| PUB[Published upgrade]
+    REVIEW -->|unsupported or uncertain| HOLD[Rejected or pending]
+    PUB --> LOC[Localized presentation]
+    LOC --> API[FastAPI]
+    API --> CAR[Timeline and 3D component]
 ```
 
-`development` 默认连接 `http://127.0.0.1:8000`。Android 模拟器可用 `--dart-define=API_BASE_URL=http://10.0.2.2:8000`；连接现有 ECS 可用 `--dart-define=API_ENV=test`。正式构建必须使用 `API_ENV=production`：
+Model review reduces unsupported publication; it does not establish absolute technical correctness. Evidence and business entity IDs stay stable across English and Chinese presentation.
 
-```powershell
-./scripts/build-release.ps1
-```
+## Getting Started
 
-该脚本需要本地 `mobile/android/key.properties` 与 `mobile/android/app/grandprix-upload.jks`，并构建已签名 APK/AAB。签名文件和密码均被 Git 忽略。`API_BASE_URL` 可以替换成将来的 HTTPS 域名；当前正式构建仅对 ECS 的 `8.134.70.237` 放行 HTTP 明文连接。
+Install the [signed APK](https://github.com/hfdsdfgr/f1-grand-prix-reminder-codex/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk) on Android after obtaining repository access. Android can update an installed release build signed with the same key; a Debug-signed build uses a different key. Uninstalling the existing app removes local follows, language and reminder preferences.
 
-```powershell
-cd backend
-.venv/Scripts/python -m unittest discover -s tests -q
-cd ../mobile
-../.tools/flutter/bin/flutter.bat analyze
-../.tools/flutter/bin/flutter.bat test
-```
+For local Backend, Flutter, tests and release-build commands, see the [developer guide](docs/getting-started.md). The app's environment and signing notes are in [mobile/README.md](mobile/README.md).
 
-## API 与数据
+## Documentation
 
-主要只读接口：`/api/v1/next-race`、`/api/v1/races?season=2026`、`/api/v1/races/{season}-{round}/results`、`/api/v1/races/{season}-{round}/briefing`、`/api/v1/evolution/{season}-{round}`。Briefing 与 Evolution 支持 `?lang=en` / `?lang=zh-CN`；缺少译文时回退英文，来源和业务实体 ID 不随语言变化。`GET /health` 可用于服务健康检查。
+- [Developer guide and API routes](docs/getting-started.md)
+- [Release notes](docs/release-notes-v1.0.0.md) · [Changelog](CHANGELOG.md)
+- [Data architecture](DATA_ARCHITECTURE.md) · [Evolution implementation](docs/evolution.md) · [Reminders](docs/reminders.md)
+- [Circuit SVG attribution](mobile/assets/circuits/ATTRIBUTION.md) · [Screenshot checklist](docs/screenshots/README.md)
 
-当前服务路径是 Internet → ECS Nginx (`:80`) → 本机 FastAPI (`127.0.0.1:8000`)。DeepSeek API Key 仅在服务器 systemd EnvironmentFile 中提供，客户端、Git 和 APK 不包含该密钥。数据设计见 [DATA_ARCHITECTURE.md](DATA_ARCHITECTURE.md)，客户端说明见 [mobile/README.md](mobile/README.md)。
+## Data Sources & Known Limitations
 
-## 已知限制
-
-- v1.0 Backend 使用公网 IP + HTTP，通信未加密；HTTPS 与域名尚未部署。
-- Evolution 的自动模型复核仍有误判风险；低置信度提示不能替代对原始来源的核对。
-- 部分比赛缺少合格官方技术来源，历史回填覆盖率不代表未来每场比赛都有数据。
-
-详见 [v1.0.0 Release Notes](docs/release-notes-v1.0.0.md) 与 [CHANGELOG.md](CHANGELOG.md)。
+- v1.0 connects to the ECS API over **unencrypted HTTP on a public IP**. HTTPS and a domain are future deployment work.
+- Evolution's automated evidence check and independent model review can still misclassify a technical claim. Inspect linked original sources, especially on lower-confidence entries.
+- Some races have no qualifying official technical source; an empty Evolution state is a valid outcome. Historical coverage does not guarantee future coverage.
+- The circuit SVGs are adapted from [F1DB under CC BY 4.0](mobile/assets/circuits/ATTRIBUTION.md). The shared 3D illustration is generated from this repository's prototype. F1, team and circuit names remain their owners' trademarks; this is an independent project.
+- This repository has no project-wide open-source license declared. Third-party asset attribution does not license the whole project.

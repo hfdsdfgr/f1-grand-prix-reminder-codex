@@ -4,6 +4,8 @@
 
 本文件定义 GrandPrixReminder 的核心数据架构、实体关系、时间模型、版本模型、数据来源管理和历史数据完整性规则。
 
+**v1.0 实现状态：**下文的 `Manual Review` 队列描述通用身份冲突与人工治理能力。当前 Evolution 升级发布流程采用来源证据校验与独立模型复核；未获支持的主张保持未发布或被拒绝。3D 部件的静态说明仍保留单独的专家审核标记。实际运行路径以 [`backend/app/post_race.py`](backend/app/post_race.py) 和 [`backend/app/evolution_worker/auto_review.py`](backend/app/evolution_worker/auto_review.py) 为准。
+
 本文件是以下模块进行数据设计时的主要约束：
 
 ```text
