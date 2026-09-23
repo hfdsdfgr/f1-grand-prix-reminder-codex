@@ -10,9 +10,9 @@ GrandPrixReminder 把下一场比赛、赛季赛历、比赛结果、赛后 Brie
 
 ## 安装与更新
 
-[GitHub Release](https://github.com/hfdsdfgr/f1-grand-prix-reminder-codex/releases/tag/v1.0.0) 已发布；仓库目前为 private，下载需要仓库权限。发布产物：
+[GitHub Release](https://github.com/hfdsdfgr/grand-prix-reminder/releases/tag/v1.0.0) 已公开发布。发布产物：
 
-- [GrandPrixReminder-v1.0.0.apk](https://github.com/hfdsdfgr/f1-grand-prix-reminder-codex/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk)：安装到 Android 手机。
+- [GrandPrixReminder-v1.0.0.apk](https://github.com/hfdsdfgr/grand-prix-reminder/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk)：安装到 Android 手机。
 - `GrandPrixReminder-v1.0.0.aab`：留在构建环境供后续应用分发，未上传 GitHub Release。
 
 版本为 `versionName=1.0.0`、`versionCode=1`，使用现有本地 release keystore 签名。将 APK 复制到手机并打开安装。已有相同包名与签名的正式测试版可尝试覆盖更新；Debug 签名与 release 签名不同，Android 不会允许直接覆盖。卸载旧版会删除设备上的本地设置与提醒，请先确认需要保留的数据。

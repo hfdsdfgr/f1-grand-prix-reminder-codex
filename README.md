@@ -8,9 +8,7 @@ An Android companion for the F1 race weekend: know when the next race starts, re
 
 ## Download
 
-[Download the v1.0.0 APK](https://github.com/hfdsdfgr/f1-grand-prix-reminder-codex/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk) · [Release notes](docs/release-notes-v1.0.0.md)
-
-The Release is published in a **private GitHub repository**. Download access currently requires repository permission.
+[Download the v1.0.0 APK](https://github.com/hfdsdfgr/grand-prix-reminder/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk) · [Release notes](docs/release-notes-v1.0.0.md)
 
 ## Product Preview
 
@@ -87,7 +85,7 @@ Model review reduces unsupported publication; it does not establish absolute tec
 
 ## Getting Started
 
-Install the [signed APK](https://github.com/hfdsdfgr/f1-grand-prix-reminder-codex/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk) on Android after obtaining repository access. Android can update an installed release build signed with the same key; a Debug-signed build uses a different key. Uninstalling the existing app removes local follows, language and reminder preferences.
+Install the [signed APK](https://github.com/hfdsdfgr/grand-prix-reminder/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk) on Android. Android can update an installed release build signed with the same key; a Debug-signed build uses a different key. Uninstalling the existing app removes local follows, language and reminder preferences.
 
 For local Backend, Flutter, tests and release-build commands, see the [developer guide](docs/getting-started.md). The app's environment and signing notes are in [mobile/README.md](mobile/README.md).
 

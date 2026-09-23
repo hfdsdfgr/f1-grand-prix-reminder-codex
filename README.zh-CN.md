@@ -8,9 +8,7 @@
 
 ## 下载
 
-[下载 v1.0.0 APK](https://github.com/hfdsdfgr/f1-grand-prix-reminder-codex/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk) · [发布说明](docs/release-notes-v1.0.0.md)
-
-Release 位于 **private GitHub 仓库**，目前需要仓库访问权限才能下载。
+[下载 v1.0.0 APK](https://github.com/hfdsdfgr/grand-prix-reminder/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk) · [发布说明](docs/release-notes-v1.0.0.md)
 
 ## 产品预览
 
@@ -87,7 +85,7 @@ flowchart LR
 
 ## 开始使用
 
-取得仓库权限后，在 Android 手机上安装[已签名 APK](https://github.com/hfdsdfgr/f1-grand-prix-reminder-codex/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk)。同一签名的 release 版本可尝试覆盖更新；Debug 版本使用不同签名。卸载旧应用会移除本机关注、语言和提醒设置。
+在 Android 手机上安装[已签名 APK](https://github.com/hfdsdfgr/grand-prix-reminder/releases/download/v1.0.0/GrandPrixReminder-v1.0.0.apk)。同一签名的 release 版本可尝试覆盖更新；Debug 版本使用不同签名。卸载旧应用会移除本机关注、语言和提醒设置。
 
 本地 Backend、Flutter、测试和 release 构建命令见[开发指南](docs/getting-started.md)。环境与签名说明见 [mobile/README.md](mobile/README.md)。
 
