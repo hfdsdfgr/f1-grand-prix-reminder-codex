@@ -1,6 +1,6 @@
-# GrandPrixReminder v1.0.0 — Release Candidate
+# GrandPrixReminder v1.0.0
 
-此文档是候选发布说明。**在新版 APK 真机验收通过前，不创建正式 `v1.0.0` 标签或 GitHub Release。**
+Android release APK 已通过最终真机验收。
 
 ## 本版内容
 
@@ -10,20 +10,18 @@ GrandPrixReminder 把下一场比赛、赛季赛历、比赛结果、赛后 Brie
 
 ## 安装与更新
 
-候选构建产物：
+构建产物：
 
 - `GrandPrixReminder-v1.0.0.apk`：安装到 Android 手机。
 - `GrandPrixReminder-v1.0.0.aab`：留作后续应用分发。
 
 版本为 `versionName=1.0.0`、`versionCode=1`，使用现有本地 release keystore 签名。将 APK 复制到手机并打开安装。已有相同包名与签名的正式测试版可尝试覆盖更新；Debug 签名与 release 签名不同，Android 不会允许直接覆盖。卸载旧版会删除设备上的本地设置与提醒，请先确认需要保留的数据。
 
-安装后按以下顺序验收：启动 → Home 下一场 → Calendar → 一场已结束比赛的 Results / Briefing / Evolution → 3D 部件与来源 → 切换中英文 → 无剧透、关注与提醒 → 后台/恢复 → 断网与重新联网。确认无崩溃、来源可打开、提醒与本地设置可在重启后保留。
+建议安装后检查：启动 → Home 下一场 → Calendar → 一场已结束比赛的 Results / Briefing / Evolution → 3D 部件与来源 → 切换中英文 → 无剧透、关注与提醒 → 后台/恢复 → 断网与重新联网。
 
 ## 已知限制
 
 - v1.0 API 当前通过公网 IP `http://8.134.70.237` 提供，HTTP 通信未加密；HTTPS 与域名部署留待 v1.0 之后。
 - Evolution 自动复核不能保证技术主张绝对正确；置信度提示与来源链接帮助核查，但不消除误判风险。
 - 部分比赛可能没有合格官方技术来源，因此 Evolution 可以为空。现有历史回填覆盖率不保证未来每场比赛都能生成技术内容。
-- 新版 release APK 尚需最终真机 smoke test；通过前不视为正式发布。
-
-正式发布将使用同一最终提交，在真机验收通过后创建 `v1.0.0` 标签和 GitHub Release，并上传 APK。AAB 保留供后续分发。
+APK 已通过最终真机 smoke test。AAB 保留供后续分发。

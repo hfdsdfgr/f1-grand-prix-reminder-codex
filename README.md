@@ -1,6 +1,6 @@
 # GrandPrixReminder
 
-GrandPrixReminder 是一款面向 F1 比赛周末的 Android 赛事助手。它把赛历、成绩、赛后 Briefing 和赛车技术演进放在同一条分站时间线上。当前版本为 **v1.0.0 Release Candidate**；正式 GitHub Release 须等新版 APK 真机验收通过。
+GrandPrixReminder 是一款面向 F1 比赛周末的 Android 赛事助手。它把赛历、成绩、赛后 Briefing 和赛车技术演进放在同一条分站时间线上。当前版本为 **v1.0.0**，Android 真机验收已通过。
 
 ## 你可以做什么
 
@@ -12,14 +12,14 @@ GrandPrixReminder 是一款面向 F1 比赛周末的 Android 赛事助手。它�
 
 Flutter 客户端只连接本项目的 FastAPI API。Backend 汇集赛历与结果，并在比赛结束后按既定时序自动发现来源、生成 Briefing 和 Evolution。Evolution 事实先经过证据校验，再由独立模型复核；未获支持的内容不会发布。每条公开升级保留原始来源，低置信度内容在 App 中提示。**模型复核不能保证内容绝对正确。** 找不到合格技术来源时，对应分站可能没有 Evolution 条目。
 
-## 安装 Android Release Candidate
+## 安装 Android v1.0.0
 
-构建完成后，候选包位于：
+构建产物位于：
 
 - `mobile/build/release-candidate/GrandPrixReminder-v1.0.0.apk`
 - `mobile/build/release-candidate/GrandPrixReminder-v1.0.0.aab`（留作后续分发，不直接安装）
 
-将 APK 复制到 Android 手机后打开安装。若手机上已有**同一签名**的正式测试包，Android 可以尝试覆盖更新；若旧包是 Debug 签名，系统会拒绝覆盖。不要为了安装而直接清除应用数据：卸载会移除本机的关注、语言和提醒设置。新版 APK 的真机验收尚待完成，因此当前不提供正式 `v1.0.0` 标签或 GitHub Release。
+将 APK 复制到 Android 手机后打开安装。若手机上已有**同一签名**的正式测试包，Android 可以尝试覆盖更新；若旧包是 Debug 签名，系统会拒绝覆盖。不要为了安装而直接清除应用数据：卸载会移除本机的关注、语言和提醒设置。
 
 ## 本地运行与检查（Windows PowerShell）
 
@@ -65,6 +65,5 @@ cd ../mobile
 - v1.0 Backend 使用公网 IP + HTTP，通信未加密；HTTPS 与域名尚未部署。
 - Evolution 的自动模型复核仍有误判风险；低置信度提示不能替代对原始来源的核对。
 - 部分比赛缺少合格官方技术来源，历史回填覆盖率不代表未来每场比赛都有数据。
-- 新版正式 APK 的 Android 真机 smoke test 尚未完成。
 
 详见 [v1.0.0 Release Notes](docs/release-notes-v1.0.0.md) 与 [CHANGELOG.md](CHANGELOG.md)。
