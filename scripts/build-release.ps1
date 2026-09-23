@@ -1,4 +1,4 @@
-param([Parameter(Mandatory = $true)][string]$ProductionApiUrl)
+param([string]$ProductionApiUrl = 'http://8.134.70.237')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $androidRoot = Join-Path $projectRoot 'mobile/android'
@@ -9,13 +9,14 @@ if (-not (Test-Path -LiteralPath (Join-Path $androidRoot 'key.properties')) -or
 $url = $ProductionApiUrl.TrimEnd('/')
 $origin = [uri]$url
 $ipAddress = $null
-if ($origin.Scheme -ne 'https' -or $origin.AbsolutePath -ne '/' -or
-    $origin.Host -notmatch '\.' -or
-    [Net.IPAddress]::TryParse($origin.Host, [ref]$ipAddress)) {
-    throw 'ProductionApiUrl must be an HTTPS domain origin.'
+if ($url -ne 'http://8.134.70.237' -and
+    ($origin.Scheme -ne 'https' -or $origin.AbsolutePath -ne '/' -or
+     $origin.Host -notmatch '\.' -or
+     [Net.IPAddress]::TryParse($origin.Host, [ref]$ipAddress))) {
+    throw 'ProductionApiUrl must be the approved ECS HTTP origin or an HTTPS domain origin.'
 }
-$health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 15
-if ($health.status -ne 'ok') { throw 'Production backend health check failed.' }
+$nextRace = Invoke-RestMethod -Uri "$url/api/v1/next-race" -TimeoutSec 15
+if (-not $nextRace.updated_at) { throw 'Production backend API check failed.' }
 
 $env:ANDROID_HOME = Join-Path $projectRoot '.tools/android-sdk'
 $env:JAVA_HOME = 'C:\Program Files\Microsoft\jdk-17.0.12.7-hotspot'
