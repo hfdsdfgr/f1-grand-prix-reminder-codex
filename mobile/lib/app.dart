@@ -47,7 +47,9 @@ class _GrandPrixAppState extends State<GrandPrixApp>
       <String>{};
   String get _effectiveLanguage =>
       _language ??
-      WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+      (WidgetsBinding.instance.platformDispatcher.locale.languageCode == 'zh'
+          ? 'zh-CN'
+          : 'en');
   String t(String text) => translate(_effectiveLanguage, text);
   Timer? _reminderTimer;
   bool _syncingReminders = false;
@@ -71,6 +73,14 @@ class _GrandPrixAppState extends State<GrandPrixApp>
     if (state == AppLifecycleState.resumed) _syncReminders();
   }
 
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (_language != null) return;
+    _repository.language = _effectiveLanguage;
+    setState(() {});
+    _syncReminders();
+  }
+
   Future<void> _syncReminders({bool requestPermissions = false}) async {
     if (_syncingReminders || _reminders?.supported != true) return;
     _syncingReminders = true;
@@ -88,9 +98,7 @@ class _GrandPrixAppState extends State<GrandPrixApp>
 
   void _changeLanguage(String? language) {
     setState(() => _language = language);
-    _repository.language =
-        language ??
-        WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    _repository.language = _effectiveLanguage;
     if (language == null) {
       widget.preferences?.remove('language');
     } else {

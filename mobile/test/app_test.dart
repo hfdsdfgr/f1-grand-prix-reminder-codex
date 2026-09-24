@@ -274,4 +274,73 @@ void main() {
       expect(preferences.getString('language'), 'zh-CN');
     },
   );
+
+  testWidgets('system Chinese requests localized Briefing content', (
+    tester,
+  ) async {
+    tester.platformDispatcher.localeTestValue = const Locale('zh', 'CN');
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final requestedLanguages = <String?>[];
+    final repo = RaceRepository(
+      client: MockClient((request) async {
+        final path = request.url.path;
+        late final Map<String, dynamic> body;
+        if (path.endsWith('/briefing')) {
+          final language = request.url.queryParameters['lang'];
+          requestedLanguages.add(language);
+          body = {
+            'race_id': '2026-14',
+            'insights': [
+              {
+                'topic': 'Tyre issues',
+                'detail': language == 'zh-CN'
+                    ? '硬胎退化较低。'
+                    : 'The hard tyre degraded slowly.',
+                'sources': [],
+              },
+            ],
+            'updated_at': '2026-06-14T12:00:00Z',
+          };
+        } else if (path.endsWith('/races')) {
+          body = {
+            'races': [
+              {
+                ...fixture(),
+                'id': '2026-14',
+                'name': 'Spanish Grand Prix',
+                'date': '2026-06-14',
+                'lifecycle_phase': 'post_race',
+              },
+            ],
+            'stale': false,
+            'updated_at': '2026-06-14T12:00:00Z',
+          };
+        } else {
+          body = {
+            'race': null,
+            'stale': false,
+            'updated_at': '2026-06-14T12:00:00Z',
+          };
+        }
+        return http.Response.bytes(
+          utf8.encode(jsonEncode(body)),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+    addTearDown(repo.dispose);
+
+    await tester.pumpWidget(
+      GrandPrixApp(repository: repo, preferences: preferences),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.article_outlined));
+    await tester.pumpAndSettle();
+
+    expect(requestedLanguages, ['zh-CN']);
+    expect(find.text('硬胎退化较低。'), findsOneWidget);
+  });
 }
