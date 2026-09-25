@@ -41,7 +41,10 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               Text(
                 tr(context, 'Language'),
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  letterSpacing: 1,
+                ),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String?>(
@@ -64,9 +67,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
                 onChanged: widget.onLanguageChanged,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               const Divider(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(tr(context, 'Spoiler-free mode')),
@@ -83,9 +86,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
               if (widget.follows case final follows?) ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 const Divider(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 AnimatedBuilder(
                   animation: follows,
                   builder: (context, _) => _FollowSettings(follows: follows),

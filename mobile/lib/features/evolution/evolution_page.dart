@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../shared/presentation.dart';
+import '../../shared/editorial.dart';
+import 'component_explorer.dart';
 
 import '../../core/language.dart';
 import '../../data/follow_service.dart';
@@ -31,6 +33,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
   String? _team, _race;
   String? _selectedUpgrade, _highlightedComponent;
   bool _compareSpecification = false;
+  bool _allTeams = true;
   bool _ghostCompare = false;
   String? _language;
   EvolutionFeed? _loadedFeed;
@@ -50,7 +53,9 @@ class _EvolutionPageState extends State<EvolutionPage> {
     _language = language;
   }
 
-  void _load() => setState(() => _request = _fetch());
+  void _load() => setState(() {
+    _request = _fetch();
+  });
 
   void _selectUpgrade(UpgradeEntry entry) => setState(() {
     _team = _evolutionTeamKey(entry);
@@ -84,89 +89,40 @@ class _EvolutionPageState extends State<EvolutionPage> {
       _highlightedComponent = componentId;
       _selectedUpgrade = entries.firstOrNull?.id;
     });
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        builder: (context, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text(
-              tr(context, 'Upgrade timeline'),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            Text(componentId),
-            if (entries.isEmpty)
-              ContentState(tr(context, 'No recorded upgrade')),
-            for (final entry in entries)
-              _UpgradeDetails(
-                entry: entry,
-                selected: true,
-                expanded: true,
-                mappedTo3d: true,
-                onSelected: () => _selectUpgrade(entry),
-              ),
-          ],
+    if (entries.isNotEmpty) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ComponentExplorer(
+            entries: entries,
+            initialId: entries.first.id,
+            enableGltf: widget.enableGltf,
+            stale: _loadedFeed?.stale ?? false,
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (context) => Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              EditorialHeader(title: 'Upgrade timeline'),
+              Text(componentId),
+              ContentState(tr(context, 'No recorded upgrade')),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        tr(context, 'Evolution'),
-        style: Theme.of(context).textTheme.displaySmall,
-      ),
-      const SizedBox(height: 12),
-      Text(tr(context, 'Follow what changes on the cars.')),
-      const SizedBox(height: 24),
-      if (widget.raceId == null) ...[
-        Row(
-          children: [
-            IconButton(
-              tooltip: tr(context, 'Previous season'),
-              onPressed: _season > 1950
-                  ? () {
-                      _season--;
-                      _team = null;
-                      _race = null;
-                      _clearSelection();
-                      _clearCompare();
-                      _load();
-                    }
-                  : null,
-              icon: const Icon(Icons.chevron_left),
-            ),
-            Expanded(
-              child: Text(
-                '${tr(context, 'Season')} $_season',
-                textAlign: TextAlign.center,
-              ),
-            ),
-            IconButton(
-              tooltip: tr(context, 'Next season'),
-              onPressed: _season < DateTime.now().year
-                  ? () {
-                      _season++;
-                      _team = null;
-                      _race = null;
-                      _clearSelection();
-                      _clearCompare();
-                      _load();
-                    }
-                  : null,
-              icon: const Icon(Icons.chevron_right),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-      ],
       FutureBuilder<EvolutionFeed>(
         future: _request,
         builder: (context, snapshot) {
@@ -181,13 +137,15 @@ class _EvolutionPageState extends State<EvolutionPage> {
           }
           final feed = snapshot.data!;
           if (!identical(_loadedFeed, feed)) {
+            final firstLoad = _loadedFeed == null;
             _loadedFeed = feed;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
-              if (widget.raceId != null &&
-                  _selectedUpgrade == null &&
-                  feed.upgrades.isNotEmpty) {
-                _selectUpgrade(feed.upgrades.first);
+              if (firstLoad && feed.upgrades.isNotEmpty) {
+                final latest = [...feed.upgrades]
+                  ..sort((a, b) => (b.round ?? 0).compareTo(a.round ?? 0));
+                if (widget.raceId == null) _race = latest.first.raceId;
+                _selectUpgrade(latest.first);
               }
             });
           }
@@ -221,7 +179,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
       });
     }
     final teamEntries = feed.upgrades
-        .where((u) => _evolutionTeamKey(u) == team)
+        .where((u) => _allTeams || _evolutionTeamKey(u) == team)
         .toList();
     teamEntries.sort((a, b) => _teamScore(b).compareTo(_teamScore(a)));
     final races = {
@@ -242,31 +200,70 @@ class _EvolutionPageState extends State<EvolutionPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        EditorialHeader(
+          title: 'Evolution',
+          eyebrow: race == null
+              ? '${tr(context, 'Season')} $_season'
+              : tr(
+                  context,
+                  feed.timeline
+                          .where((event) => event.raceId == race)
+                          .firstOrNull
+                          ?.race ??
+                      entries.firstOrNull?.race ??
+                      race,
+                ),
+          subtitle: race == null
+              ? 'Follow what changes on the cars.'
+              : 'How the car changed this weekend.',
+          trailing: EditorialShare(
+            title: tr(context, 'Evolution'),
+            sources: entries
+                .expand((e) => e.sources.map((s) => s.url))
+                .toSet()
+                .toList(),
+          ),
+        ),
         if (feed.stale)
           ContentState(
             tr(context, 'Showing saved upgrades. They may have changed.'),
           ),
         ...[
           DropdownButtonFormField<String>(
-            key: ValueKey('team-$_season-$team'),
-            initialValue: team,
+            key: ValueKey('team-$_season-$team-$_allTeams'),
+            initialValue: _allTeams ? '*' : team,
             isExpanded: true,
             decoration: InputDecoration(labelText: tr(context, 'Team')),
             items: [
+              DropdownMenuItem(
+                value: '*',
+                child: Text(tr(context, 'All teams')),
+              ),
               for (final item in carTeams)
-                DropdownMenuItem(value: item.id, child: Text(item.name)),
+                DropdownMenuItem(
+                  value: item.id,
+                  child: Text(tr(context, item.name)),
+                ),
               for (final item in extraTeams.entries)
-                DropdownMenuItem(value: item.key, child: Text(item.value)),
+                DropdownMenuItem(
+                  value: item.key,
+                  child: Text(tr(context, item.value)),
+                ),
             ],
             onChanged: (value) => setState(() {
-              _team = value;
+              _allTeams = value == '*';
+              if (!_allTeams) _team = value;
               _race = null;
               _clearSelection();
               _clearCompare();
             }),
           ),
           const SizedBox(height: 16),
+          EditorialLabel(
+            '${entries.length} ${tr(context, 'documented updates')}',
+          ),
           CarViewer(
+            editorial: true,
             enableGltf: widget.enableGltf,
             highlightedComponentId: _highlightedComponent,
             highlightedTeamId: team,
@@ -279,6 +276,80 @@ class _EvolutionPageState extends State<EvolutionPage> {
             ghostComponentIds: _ghostComponents,
           ),
           const SizedBox(height: 32),
+        ],
+        for (var i = 0; i < entries.length; i++)
+          EditorialRow(
+            key: ValueKey(entries[i].id),
+            selected: entries[i].id == _selectedUpgrade,
+            number: i + 1,
+            title: entries[i].component,
+            subtitle:
+                '${tr(context, entries[i].team)} · ${tr(context, entries[i].status)}',
+            detail: entries[i].change ?? entries[i].title,
+            thumbnail: carComponentIds.contains(entries[i].componentId)
+                ? ComponentThumbnail(
+                    componentId: entries[i].componentId!,
+                    teamId: entries[i].teamId,
+                  )
+                : null,
+            onTap: () {
+              _selectUpgrade(entries[i]);
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ComponentExplorer(
+                    entries: entries,
+                    initialId: entries[i].id,
+                    enableGltf: widget.enableGltf,
+                    stale: feed.stale,
+                  ),
+                ),
+              );
+            },
+          ),
+        if (entries.isEmpty)
+          ContentState(tr(context, 'No recorded upgrades for this selection.')),
+        if (widget.raceId == null) ...[
+          Row(
+            children: [
+              IconButton(
+                tooltip: tr(context, 'Previous season'),
+                onPressed: _season > 1950
+                    ? () {
+                        _season--;
+                        _loadedFeed = null;
+                        _team = null;
+                        _race = null;
+                        _clearSelection();
+                        _clearCompare();
+                        _load();
+                      }
+                    : null,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Expanded(
+                child: Text(
+                  '${tr(context, 'Season')} $_season',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              IconButton(
+                tooltip: tr(context, 'Next season'),
+                onPressed: _season < DateTime.now().year
+                    ? () {
+                        _season++;
+                        _loadedFeed = null;
+                        _team = null;
+                        _race = null;
+                        _clearSelection();
+                        _clearCompare();
+                        _load();
+                      }
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
         ],
         if (feed.timeline.isNotEmpty || teamEntries.isNotEmpty) ...[
           SectionHeading(tr(context, 'Season Evolution')),
@@ -359,10 +430,6 @@ class _EvolutionPageState extends State<EvolutionPage> {
               }),
             ),
           const SizedBox(height: 24),
-          if (entries.isEmpty)
-            ContentState(
-              tr(context, 'No recorded upgrades for this team this season.'),
-            ),
           if (race != null && entries.isNotEmpty) ...[
             FilterChip(
               key: const ValueKey('specification-compare'),
@@ -391,11 +458,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
                       status: entry.status,
                     ),
                 ],
-                ghostAvailable:
-                    _previousRace(feed, race) != null &&
-                    entries.any(
-                      (entry) => carComponentIds.contains(entry.componentId),
-                    ),
+                ghostAvailable: false,
                 ghostEnabled: _ghostCompare,
                 onGhostChanged: (value) =>
                     setState(() => _ghostCompare = value),
@@ -409,14 +472,6 @@ class _EvolutionPageState extends State<EvolutionPage> {
               const SizedBox(height: 8),
             ],
           ],
-          for (final entry in entries)
-            _UpgradeDetails(
-              key: ValueKey(entry.id),
-              entry: entry,
-              selected: entry.id == _selectedUpgrade,
-              mappedTo3d: carComponentIds.contains(entry.componentId),
-              onSelected: () => _selectUpgrade(entry),
-            ),
         ],
         TextButton.icon(
           onPressed: _load,
@@ -464,101 +519,3 @@ String _evolutionTeamKey(UpgradeEntry entry) {
 final _neverNotify = _NeverNotify();
 
 class _NeverNotify extends ChangeNotifier {}
-
-class _UpgradeDetails extends StatelessWidget {
-  final UpgradeEntry entry;
-  final bool selected;
-  final bool mappedTo3d;
-  final VoidCallback onSelected;
-  final bool expanded;
-  const _UpgradeDetails({
-    super.key,
-    required this.entry,
-    required this.selected,
-    required this.mappedTo3d,
-    required this.onSelected,
-    this.expanded = false,
-  });
-
-  @override
-  Widget build(BuildContext context) => ExpansionTile(
-    initiallyExpanded: expanded,
-    onExpansionChanged: (expanded) {
-      if (expanded) onSelected();
-    },
-    leading: Icon(
-      selected ? Icons.adjust : Icons.circle_outlined,
-      color: selected ? Theme.of(context).colorScheme.primary : null,
-      size: 18,
-    ),
-    tilePadding: EdgeInsets.zero,
-    childrenPadding: const EdgeInsets.only(bottom: 24),
-    title: Text('${entry.team} · ${tr(context, entry.component)}'),
-    subtitle: Text(
-      '${tr(context, entry.race ?? 'Not available')} · ${tr(context, entry.status)}',
-    ),
-    children: [
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(entry.title, style: Theme.of(context).textTheme.titleLarge),
-            for (final field in [
-              ('Change', entry.change),
-              ('Goal', entry.goal),
-              ('Expected effect', entry.expectedEffect),
-            ])
-              if (field.$2 != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text('${tr(context, field.$1)}: ${field.$2}'),
-                ),
-            if (!mappedTo3d)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  tr(
-                    context,
-                    'This upgrade has no compatible 3D component mapping.',
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            const SizedBox(height: 16),
-            Text(
-              tr(context, 'Sources'),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            for (final source in entry.sources)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SourceReference(
-                      publisher: source.provider,
-                      url: source.url,
-                    ),
-                    if (source.publishedAt != null)
-                      Text(
-                        MaterialLocalizations.of(context)
-                            .formatMediumDate(source.publishedAt!),
-                      ),
-                  ],
-                ),
-              ),
-            if ((double.tryParse(entry.confidence) ?? 1) < 0.75)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Text(
-                  tr(context, 'Low-confidence AI assessment. Check the linked source.'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-          ],
-        ),
-      ),
-    ],
-  );
-}

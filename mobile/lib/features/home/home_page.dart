@@ -1,9 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:intl/intl.dart';
+
+import '../../shared/editorial.dart';
+import '../../shared/editorial_media.dart';
+import 'latest_section.dart';
 
 import '../../core/language.dart';
-import '../../shared/presentation.dart';
 import '../../core/spoilers.dart';
 import '../../data/race_repository.dart';
 import '../../data/follow_service.dart';
@@ -21,6 +26,7 @@ class HomePage extends StatelessWidget {
   final Set<String> revealedSessions;
   final ValueChanged<String>? onRevealSession;
   final FollowService? follows;
+  final ValueChanged<String?>? onOpenBriefing;
   const HomePage({
     super.key,
     required this.repository,
@@ -30,33 +36,92 @@ class HomePage extends StatelessWidget {
     this.revealedSessions = const {},
     this.onRevealSession,
     this.follows,
+    this.onOpenBriefing,
   });
   @override
   Widget build(BuildContext context) => RaceFeedView(
     repository: repository,
+    emptyContent: LatestSection(
+      repository: repository,
+      season: DateTime.now().year,
+      spoilerFree: spoilerFree,
+      revealedSessions: revealedSessions,
+      onRevealSession: onRevealSession,
+      onOpenBriefing: onOpenBriefing,
+      follows: follows,
+    ),
     builder: (feed) {
       final race = feed.races.first;
       final theme = Theme.of(context);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            tr(
-              context,
-              race.lifecyclePhase == 'race_weekend'
-                  ? 'Race weekend'
-                  : 'Next Grand Prix',
+          Row(
+            children: [
+              const Expanded(child: EditorialLabel('GrandPrixReminder')),
+              Text('${race.season}', style: theme.textTheme.labelLarge),
+            ],
+          ),
+          const SizedBox(height: 24),
+          EditorialMediaView(
+            repository: repository,
+            raceId: race.id,
+            role: 'home',
+            spoilerHidden:
+                spoilerFree &&
+                !revealedSessions.contains(spoilerSessionKey(race.id)),
+            heroHeight: 370,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                EditorialHeader(
+                  title: race.name,
+                  eyebrow: [
+                    if (race.round != null)
+                      '${race.round}${race.totalRounds == null ? '' : ' / ${race.totalRounds}'}',
+                    tr(
+                      context,
+                      race.lifecyclePhase == 'race_weekend'
+                          ? 'Race weekend'
+                          : 'Next Grand Prix',
+                    ),
+                  ].join('  /  '),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        tr(context, race.circuit),
+                        style: theme.textTheme.headlineSmall,
+                      ),
+                    ),
+                    if (race.circuitLayout case final layout?)
+                      SizedBox(
+                        width: 48,
+                        height: 32,
+                        child: SvgPicture.asset(
+                          layout.assetPath,
+                          semanticsLabel: tr(context, race.circuit),
+                          colorFilter: ColorFilter.mode(
+                            theme.colorScheme.onSurface,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                if (race.startsAt != null)
+                  Text(
+                    localDate(context, race.startsAt!),
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+              ],
             ),
-            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
           ),
-          const SizedBox(height: 16),
-          Text(tr(context, race.name), style: theme.textTheme.displaySmall),
-          const SizedBox(height: 16),
-          Text(
-            tr(context, race.circuit),
-            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 32),
           if (race.lifecyclePhase == 'race_weekend') ...[
             if (race.currentSession case final current?) ...[
               Text(
@@ -89,10 +154,6 @@ class HomePage extends StatelessWidget {
             ],
           ] else if (race.startsAt != null) ...[
             Text(
-              localDate(context, race.startsAt!),
-              style: theme.textTheme.titleLarge,
-            ),
-            Text(
               '${tr(context, 'Your local time')} (${race.startsAt!.timeZoneName})',
               style: theme.textTheme.bodySmall,
             ),
@@ -100,6 +161,107 @@ class HomePage extends StatelessWidget {
             Countdown(startsAt: race.startsAt!),
           ] else
             Text('${race.date} · ${tr(context, 'Start time to be confirmed')}'),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(child: EditorialLabel('Weekend schedule')),
+              EditorialLabel('Local time'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(),
+          for (final session in race.sessions) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final time = session.startsAt;
+                  final locale = Localizations.localeOf(context)
+                      .toLanguageTag();
+                  final kind = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tr(context, session.kind).toUpperCase(),
+                        style: theme.textTheme.labelLarge,
+                      ),
+                      if (session.status != 'scheduled')
+                        Text(
+                          tr(context, sessionStatusLabel(session.status)),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                    ],
+                  );
+                  if (MediaQuery.textScalerOf(context).scale(14) > 20) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        kind,
+                        Text(
+                          time == null
+                              ? tr(context, 'Not available')
+                              : localDate(context, time),
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 35,
+                        child: Text(
+                          time == null
+                              ? '—'
+                              : DateFormat(
+                                  'E',
+                                  locale,
+                                ).format(time).toUpperCase(),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 65,
+                        child: Text(
+                          time == null
+                              ? '—'
+                              : DateFormat(
+                                  'd MMM',
+                                  locale,
+                                ).format(time).toUpperCase(),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 55,
+                        child: Text(
+                          time == null
+                              ? '—'
+                              : DateFormat('HH:mm', locale).format(time),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      Expanded(child: kind),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const Divider(),
+          ],
+          const Divider(),
+          const SizedBox(height: 16),
+          LatestSection(
+            repository: repository,
+            season: race.season > DateTime.now().year
+                ? DateTime.now().year
+                : race.season,
+            spoilerFree: spoilerFree,
+            revealedSessions: revealedSessions,
+            onRevealSession: onRevealSession,
+            onOpenBriefing: onOpenBriefing,
+            follows: follows,
+          ),
           const SizedBox(height: 20),
           OutlinedButton.icon(
             onPressed: () => Navigator.of(context).push(
@@ -136,44 +298,6 @@ class HomePage extends StatelessWidget {
             season: race.season,
             follows: follows,
           ),
-          const SizedBox(height: 40),
-          SectionHeading(tr(context, 'Race weekend')),
-          for (final session in race.sessions)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                spacing: 24,
-                runSpacing: 8,
-                children: [
-                  Text(
-                    tr(context, session.kind),
-                    style: TextStyle(
-                      fontWeight: session.kind == 'Race'
-                          ? FontWeight.w700
-                          : FontWeight.w400,
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        session.startsAt == null
-                            ? tr(context, 'Not available')
-                            : localDate(context, session.startsAt!),
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      Text(
-                        tr(context, sessionStatusLabel(session.status)),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
           if (race.sessions.isEmpty)
             Text(tr(context, 'Session times have not been published.')),
           const SizedBox(height: 24),
@@ -224,20 +348,72 @@ class _CountdownState extends State<Countdown> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(widget.label ?? tr(context, 'Race starts in')),
-      const SizedBox(height: 8),
-      Text(
-        countdownLabel(
-          widget.startsAt,
-          DateTime.now(),
-          language: Localizations.localeOf(context).languageCode,
-        ),
-        style: Theme.of(context).textTheme.headlineMedium
-            ?.copyWith(fontFeatures: [const FontFeature.tabularFigures()]),
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final remaining = widget.startsAt.difference(now);
+    if (remaining <= Duration.zero) {
+      return Text(tr(context, 'Scheduled start reached'));
+    }
+    final values = [
+      remaining.inDays,
+      remaining.inHours % 24,
+      remaining.inMinutes % 60,
+    ];
+    return Semantics(
+      label: countdownLabel(
+        widget.startsAt,
+        now,
+        language: Localizations.localeOf(context).languageCode,
       ),
-    ],
-  );
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.label ?? tr(context, 'Race starts in'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (var i = 0; i < values.length; i++)
+                  Expanded(
+                    child: Container(
+                      padding: EdgeInsets.only(left: i == 0 ? 0 : 20),
+                      decoration: i == 0
+                          ? null
+                          : BoxDecoration(
+                              border: Border(
+                                left: BorderSide(
+                                  color: Theme.of(context).dividerColor,
+                                  width: .5,
+                                ),
+                              ),
+                            ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            values[i].toString().padLeft(2, '0'),
+                            style: Theme.of(context).textTheme.displaySmall
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: 40,
+                                  fontFeatures: [
+                                    const FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                          ),
+                          EditorialLabel(['Days', 'Hours', 'Minutes'][i]),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

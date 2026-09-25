@@ -50,6 +50,7 @@ class Race(BaseModel):
     id: str
     season: int
     round: int
+    total_rounds: int | None = None
     name: str
     circuit: str
     country: str

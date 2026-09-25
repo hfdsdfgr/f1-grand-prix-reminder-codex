@@ -8,8 +8,7 @@ extension AppLocalizationX on BuildContext {
 }
 
 /// UI strings use English keys; unknown upstream names retain their source text.
-String tr(BuildContext context, String text) =>
-    localizedText(context, text);
+String tr(BuildContext context, String text) => localizedText(context, text);
 
 String translate(String language, String text) =>
     language.startsWith('zh') ? (chineseTranslations[text] ?? text) : text;
@@ -25,6 +24,48 @@ String sessionStatusLabel(String status) => switch (status) {
 };
 
 const chineseTranslations = {
+  'Completed races first': '优先查看已完成的比赛',
+  'Round': '分站',
+  'Cadillac F1 Team': '凯迪拉克 F1 车队',
+  'RB F1 Team': 'Racing Bulls 车队',
+  'Barcelona Grand Prix': '巴塞罗那大奖赛',
+  'No recorded upgrades for this selection.': '当前所选范围暂无已记录的升级。',
+  'Drag · Pinch · Tap component': '拖动旋转 · 双指缩放 · 轻点部件',
+  'Calendar': '赛历',
+  'Explore': '探索',
+  'Key stories': '焦点新闻',
+  'Quotes': '引语',
+  'Analysis': '分析',
+  'What happened and what it means.': '发生了什么，又意味着什么。',
+  'How the car changed this weekend.': '本周末，赛车发生了哪些变化。',
+  'Latest': '最新动态',
+  'View all': '查看全部',
+  'Briefing available': '简报已发布',
+  'documented updates': '项有据可查的升级',
+  'Saved content': '已保存的内容',
+  'Days': '天',
+  'Hours': '小时',
+  'Minutes': '分钟',
+  'Local time': '当地时间',
+  'Open source': '打开来源',
+  'Unable to open source.': '无法打开来源链接。',
+  'Unknown': '未知',
+  'Details': '详情',
+  'Purpose': '目的',
+  'Confidence': '置信度',
+  'Low': '低',
+  'Review original evidence.': '请查阅原始证据。',
+  'Original evidence': '原文证据',
+  'No verified quotes are available.': '暂无可核验的引语。',
+  'Fullscreen': '全屏',
+  'Standard': '标准',
+  'Viewer tools & knowledge': '查看工具与部件知识',
+  'Share': '分享',
+  'Sharing is unavailable.': '当前无法使用分享。',
+  'Unable to share. Please try again.': '无法分享，请重试。',
+  'Media unavailable': '图片暂不可用',
+  'Media credit': '图片来源',
+
   'Language': '语言',
   'Follow system': '跟随系统',
   'Simplified Chinese': '简体中文',
@@ -233,7 +274,8 @@ const chineseTranslations = {
   'No verified briefing is available for this race.': '本站暂无可核验的赛后简报。',
   'No completed race is available for briefing.': '暂无已结束的比赛可供查看赛后简报。',
   'Sources': '来源',
-  'Low-confidence AI assessment. Check the linked source.': '此项 AI 判断置信度较低，请核对所附来源。',
+  'Low-confidence AI assessment. Check the linked source.':
+      '此项 AI 判断置信度较低，请核对所附来源。',
   'Technical themes': '技术主题',
   'Team performance': '车队表现',
   'Tyre issues': '轮胎问题',

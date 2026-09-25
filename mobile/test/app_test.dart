@@ -22,7 +22,8 @@ Map<String, dynamic> fixture() => {
 };
 
 void main() {
-  final dispatcher = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
+  final dispatcher =
+      TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
   dispatcher.localeTestValue = const Locale('zh', 'CN');
   dispatcher.localesTestValue = const [Locale('zh', 'CN')];
   test('repository restores the last successful schedule offline', () async {
@@ -178,16 +179,22 @@ void main() {
       addTearDown(repo.dispose);
       await tester.pumpWidget(GrandPrixApp(repository: repo));
       await tester.pumpAndSettle();
-      expect(find.text('Test Grand Prix'), findsOneWidget);
+      expect(find.text('TEST GRAND PRIX'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('赛事').last);
+      await tester.tap(find.text('赛历').last);
       await tester.pumpAndSettle();
       expect(find.text('赛季'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('赛后简报').last);
+      await tester.tap(find.text('首页').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('查看全部'));
+      await tester.tap(find.text('查看全部'));
       await tester.pumpAndSettle();
       expect(find.text('暂无已结束的比赛可供查看赛后简报。'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('TEST GRAND PRIX'), findsOneWidget);
     });
   }
 
@@ -224,8 +231,8 @@ void main() {
       final preferences = await SharedPreferences.getInstance();
       var requests = 0;
       final repo = RaceRepository(
-        client: MockClient((_) async {
-          requests++;
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('next-race')) requests++;
           return http.Response(
             jsonEncode({
               'race': {...fixture(), 'name': 'Azerbaijan Grand Prix'},
@@ -248,27 +255,33 @@ void main() {
             .languageCode,
         'zh',
       );
-      await tester.tap(find.byTooltip('语言'));
+      await tester.tap(find.text('设置').last);
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.widgetWithText(CheckedPopupMenuItem<String?>, 'English'),
-      );
+      await tester.tap(find.byType(DropdownButtonFormField<String?>));
       await tester.pumpAndSettle();
-      expect(find.text('Next Grand Prix'), findsOneWidget);
-      expect(find.text('Azerbaijan Grand Prix'), findsOneWidget);
+      await tester.tap(find.text('English').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Home').last);
+      await tester.pumpAndSettle();
+      expect(find.text('NEXT GRAND PRIX'), findsOneWidget);
+      expect(find.text('AZERBAIJAN GRAND PRIX'), findsOneWidget);
       expect(preferences.getString('language'), 'en');
-      expect(requests, 1);
+      expect(requests, 2);
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(
         GrandPrixApp(repository: repo, preferences: preferences),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Next Grand Prix'), findsOneWidget);
-      await tester.tap(find.byTooltip('Language'));
+      await tester.tap(find.text('Home').last);
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.widgetWithText(CheckedPopupMenuItem<String?>, 'Simplified Chinese'),
-      );
+      expect(find.text('NEXT GRAND PRIX'), findsOneWidget);
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<String?>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Simplified Chinese').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('首页').last);
       await tester.pumpAndSettle();
       expect(find.text('下一站大奖赛'), findsOneWidget);
       expect(preferences.getString('language'), 'zh-CN');
@@ -337,10 +350,12 @@ void main() {
       GrandPrixApp(repository: repo, preferences: preferences),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.article_outlined));
+    await tester.ensureVisible(find.text('查看全部'));
+    await tester.tap(find.text('查看全部'));
     await tester.pumpAndSettle();
 
-    expect(requestedLanguages, ['zh-CN']);
+    expect(requestedLanguages, everyElement('zh-CN'));
+    expect(requestedLanguages, isNotEmpty);
     expect(find.text('硬胎退化较低。'), findsOneWidget);
   });
 }

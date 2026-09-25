@@ -25,6 +25,129 @@ class AppLocalizationsZh extends AppLocalizations {
   String get english => 'English';
 
   @override
+  String get s_5d12ee2473eb => '优先查看已完成的比赛';
+
+  @override
+  String get s_ec7b59833520 => '分站';
+
+  @override
+  String get s_4f46c4af96ea => '凯迪拉克 F1 车队';
+
+  @override
+  String get s_4e312f5c76bd => 'Racing Bulls 车队';
+
+  @override
+  String get s_146c89d5ccc6 => '巴塞罗那大奖赛';
+
+  @override
+  String get s_b861b3b2a2b4 => '当前所选范围暂无已记录的升级。';
+
+  @override
+  String get s_623de52267e2 => '拖动旋转 · 双指缩放 · 轻点部件';
+
+  @override
+  String get s_adab5090ac6a => '赛历';
+
+  @override
+  String get s_b965ae66fcc4 => '探索';
+
+  @override
+  String get s_87c82808e3f1 => '焦点新闻';
+
+  @override
+  String get s_7b0257ce75ad => '引语';
+
+  @override
+  String get s_62c7fcf46e27 => '分析';
+
+  @override
+  String get s_43e924426fed => '发生了什么，又意味着什么。';
+
+  @override
+  String get s_8c5862385dca => '本周末，赛车发生了哪些变化。';
+
+  @override
+  String get s_decd7ca80010 => '最新动态';
+
+  @override
+  String get s_931e1a4b152a => '查看全部';
+
+  @override
+  String get s_ed3624e32d8f => '简报已发布';
+
+  @override
+  String get s_33e5ce14a3d8 => '项有据可查的升级';
+
+  @override
+  String get s_abdc43daf2fa => '已保存的内容';
+
+  @override
+  String get s_f6bb0f468a85 => '天';
+
+  @override
+  String get s_9e25a34e635a => '小时';
+
+  @override
+  String get s_092f99ea11a3 => '分钟';
+
+  @override
+  String get s_14ca480390f7 => '当地时间';
+
+  @override
+  String get s_6cc3364a242c => '打开来源';
+
+  @override
+  String get s_9ee91c105645 => '无法打开来源链接。';
+
+  @override
+  String get s_bc7819b34ff8 => '未知';
+
+  @override
+  String get s_dc3decbb9384 => '详情';
+
+  @override
+  String get s_a0fb821bdaf9 => '目的';
+
+  @override
+  String get s_82fa7d52c89d => '置信度';
+
+  @override
+  String get s_a124947cbd2d => '低';
+
+  @override
+  String get s_9195c1116ccd => '请查阅原始证据。';
+
+  @override
+  String get s_24d52bb5af2b => '原文证据';
+
+  @override
+  String get s_0bbf0a23272c => '暂无可核验的引语。';
+
+  @override
+  String get s_bb08d10b00a6 => '全屏';
+
+  @override
+  String get s_2dfa66079d9b => '标准';
+
+  @override
+  String get s_20750c3d70b9 => '查看工具与部件知识';
+
+  @override
+  String get s_09ca55ca52d2 => '分享';
+
+  @override
+  String get s_b94f001614e8 => '当前无法使用分享。';
+
+  @override
+  String get s_70951f0d20d9 => '无法分享，请重试。';
+
+  @override
+  String get s_da356f930040 => '图片暂不可用';
+
+  @override
+  String get s_d977a86b0b4b => '图片来源';
+
+  @override
   String get s_89b86ab0e66f => '语言';
 
   @override
@@ -976,6 +1099,129 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get english => 'English';
+
+  @override
+  String get s_5d12ee2473eb => '优先查看已完成的比赛';
+
+  @override
+  String get s_ec7b59833520 => '分站';
+
+  @override
+  String get s_4f46c4af96ea => '凯迪拉克 F1 车队';
+
+  @override
+  String get s_4e312f5c76bd => 'Racing Bulls 车队';
+
+  @override
+  String get s_146c89d5ccc6 => '巴塞罗那大奖赛';
+
+  @override
+  String get s_b861b3b2a2b4 => '当前所选范围暂无已记录的升级。';
+
+  @override
+  String get s_623de52267e2 => '拖动旋转 · 双指缩放 · 轻点部件';
+
+  @override
+  String get s_adab5090ac6a => '赛历';
+
+  @override
+  String get s_b965ae66fcc4 => '探索';
+
+  @override
+  String get s_87c82808e3f1 => '焦点新闻';
+
+  @override
+  String get s_7b0257ce75ad => '引语';
+
+  @override
+  String get s_62c7fcf46e27 => '分析';
+
+  @override
+  String get s_43e924426fed => '发生了什么，又意味着什么。';
+
+  @override
+  String get s_8c5862385dca => '本周末，赛车发生了哪些变化。';
+
+  @override
+  String get s_decd7ca80010 => '最新动态';
+
+  @override
+  String get s_931e1a4b152a => '查看全部';
+
+  @override
+  String get s_ed3624e32d8f => '简报已发布';
+
+  @override
+  String get s_33e5ce14a3d8 => '项有据可查的升级';
+
+  @override
+  String get s_abdc43daf2fa => '已保存的内容';
+
+  @override
+  String get s_f6bb0f468a85 => '天';
+
+  @override
+  String get s_9e25a34e635a => '小时';
+
+  @override
+  String get s_092f99ea11a3 => '分钟';
+
+  @override
+  String get s_14ca480390f7 => '当地时间';
+
+  @override
+  String get s_6cc3364a242c => '打开来源';
+
+  @override
+  String get s_9ee91c105645 => '无法打开来源链接。';
+
+  @override
+  String get s_bc7819b34ff8 => '未知';
+
+  @override
+  String get s_dc3decbb9384 => '详情';
+
+  @override
+  String get s_a0fb821bdaf9 => '目的';
+
+  @override
+  String get s_82fa7d52c89d => '置信度';
+
+  @override
+  String get s_a124947cbd2d => '低';
+
+  @override
+  String get s_9195c1116ccd => '请查阅原始证据。';
+
+  @override
+  String get s_24d52bb5af2b => '原文证据';
+
+  @override
+  String get s_0bbf0a23272c => '暂无可核验的引语。';
+
+  @override
+  String get s_bb08d10b00a6 => '全屏';
+
+  @override
+  String get s_2dfa66079d9b => '标准';
+
+  @override
+  String get s_20750c3d70b9 => '查看工具与部件知识';
+
+  @override
+  String get s_09ca55ca52d2 => '分享';
+
+  @override
+  String get s_b94f001614e8 => '当前无法使用分享。';
+
+  @override
+  String get s_70951f0d20d9 => '无法分享，请重试。';
+
+  @override
+  String get s_da356f930040 => '图片暂不可用';
+
+  @override
+  String get s_d977a86b0b4b => '图片来源';
 
   @override
   String get s_89b86ab0e66f => '语言';

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/language.dart';
 import 'car_model.dart';
+import '../../shared/editorial.dart';
 import 'compare_panel.dart';
 import 'gltf_car_stage.dart';
 
@@ -14,6 +16,9 @@ class CarViewer extends StatefulWidget {
   const CarViewer({
     super.key,
     this.enableGltf = true,
+    this.editorial = false,
+    this.initialFocus = false,
+    this.componentOnly = false,
     this.highlightedComponentId,
     this.highlightedTeamId,
     this.onComponentSelected,
@@ -25,7 +30,7 @@ class CarViewer extends StatefulWidget {
     this.ghostComponentIds = const {},
   });
 
-  final bool enableGltf;
+  final bool enableGltf, editorial, initialFocus, componentOnly;
   final String? highlightedComponentId, highlightedTeamId;
   final ValueChanged<String>? onComponentSelected;
   final bool showTeamSelector;
@@ -46,6 +51,15 @@ class _CarViewerState extends State<CarViewer>
   String _selected = 'front_wing', _team = 'neutral', _archive = 'generic';
   String? _compareArchive;
   bool _labels = true, _wire = false;
+  int _viewIndex = 0;
+  bool _fullscreen = false;
+  VoidCallback? _refreshFullscreen;
+
+  void _update(VoidCallback change) {
+    setState(change);
+    _refreshFullscreen?.call();
+  }
+
   bool _focusMode = false, _exploded = false, _technical = false;
   bool _compareMode = false;
   bool _gltfReady = false, _gltfUnavailable = false;
@@ -58,12 +72,17 @@ class _CarViewerState extends State<CarViewer>
     final component = widget.highlightedComponentId;
     if (carComponentIds.contains(component)) _selected = component!;
     _team = carTeamKey(widget.highlightedTeamId);
+    _labels = !widget.editorial;
+    if (widget.initialFocus) {
+      _focusMode = true;
+      _focusAnimation.value = 1;
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;
-    setState(() {
+    _update(() {
       _resumed = state == AppLifecycleState.resumed;
       if (!_resumed) {
         _gltfReady = false;
@@ -82,7 +101,7 @@ class _CarViewerState extends State<CarViewer>
     duration: const Duration(milliseconds: 240),
   )..addListener(_repaint);
 
-  void _repaint() => setState(() {});
+  void _repaint() => _update(() {});
 
   @override
   void didUpdateWidget(covariant CarViewer oldWidget) {
@@ -115,20 +134,20 @@ class _CarViewerState extends State<CarViewer>
     _pitch = (_pitch + dy).clamp(-80 * math.pi / 180, 89 * math.pi / 180);
   }
 
-  void _view(double yaw, double pitch) => setState(() {
+  void _view(double yaw, double pitch) => _update(() {
     _yaw = yaw;
     _pitch = pitch;
     _zoom = 1;
   });
 
   void _toggleFocus() {
-    setState(() => _focusMode = !_focusMode);
+    _update(() => _focusMode = !_focusMode);
     _animate(_focusAnimation, _focusMode);
   }
 
   void _focusPart(String componentId) {
     if (!carComponentIds.contains(componentId)) return;
-    setState(() {
+    _update(() {
       _selected = componentId;
       _focusMode = true;
     });
@@ -137,7 +156,7 @@ class _CarViewerState extends State<CarViewer>
   }
 
   void _toggleExploded() {
-    setState(() => _exploded = !_exploded);
+    _update(() => _exploded = !_exploded);
     _animate(_explodeAnimation, _exploded);
   }
 
@@ -172,6 +191,525 @@ class _CarViewerState extends State<CarViewer>
     }
   }
 
+  Future<void> _openFullscreen(CarModel model, bool zh) async {
+    _update(() {
+      _fullscreen = true;
+      _gltfReady = false;
+    });
+    await showDialog<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) {
+          _refreshFullscreen = () => update(() {});
+          return Dialog.fullscreen(
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: CloseButton(onPressed: () => Navigator.pop(context)),
+                ),
+                Expanded(child: Center(child: _stage(context, model, zh))),
+                Text(tr(context, 'Drag to rotate · Pinch to zoom')),
+                const SizedBox(height: 24),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    _refreshFullscreen = null;
+    if (mounted) {
+      _update(() {
+        _fullscreen = false;
+        _gltfReady = false;
+      });
+    }
+  }
+
+  Widget _stage(BuildContext context, CarModel model, bool zh) => LayoutBuilder(
+    builder: (context, constraints) {
+      final size = Size(
+        constraints.maxWidth,
+        _fullscreen
+            ? MediaQuery.sizeOf(context).height * .65
+            : widget.editorial
+            ? 220
+            : constraints.maxWidth < 500
+            ? 390
+            : 480,
+      );
+      final painter = CarPainter(
+        model: model,
+        yaw: _yaw,
+        pitch: _pitch,
+        zoom: _zoom,
+        selected: _selected,
+        team: _team,
+        labels: _labels,
+        wire: _wire,
+        scheme: Theme.of(context).colorScheme,
+        chinese: zh,
+        textScaler: MediaQuery.textScalerOf(context),
+        labelStyle: Theme.of(context).textTheme.labelMedium,
+        renderModel:
+            widget.componentOnly || !_gltfReady || _wire || widget.ghostCompare,
+        isolated: widget.componentOnly,
+        focus: _focusAnimation.value,
+        exploded: _explodeAnimation.value,
+        technical: _technical,
+        ghostCompare: widget.ghostCompare,
+        ghostComponentIds: widget.ghostComponentIds,
+      );
+      return Semantics(
+        label: tr(context, 'Interactive car model'),
+        value: model.components
+            .firstWhere((c) => c.id == _selected)
+            .text(zh)[0],
+        child: Focus(
+          focusNode: _focus,
+          onKeyEvent: (_, event) {
+            if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+              return KeyEventResult.ignored;
+            }
+            final key = event.logicalKey;
+            if (![
+              LogicalKeyboardKey.arrowLeft,
+              LogicalKeyboardKey.arrowRight,
+              LogicalKeyboardKey.arrowUp,
+              LogicalKeyboardKey.arrowDown,
+              LogicalKeyboardKey.equal,
+              LogicalKeyboardKey.add,
+              LogicalKeyboardKey.minus,
+            ].contains(key)) {
+              return KeyEventResult.ignored;
+            }
+            _update(() {
+              if (key == LogicalKeyboardKey.arrowLeft) _rotate(-.1, 0);
+              if (key == LogicalKeyboardKey.arrowRight) _rotate(.1, 0);
+              if (key == LogicalKeyboardKey.arrowUp) _rotate(0, .1);
+              if (key == LogicalKeyboardKey.arrowDown) _rotate(0, -.1);
+              if (key == LogicalKeyboardKey.equal ||
+                  key == LogicalKeyboardKey.add) {
+                _zoom = (_zoom + .1).clamp(.5, 3);
+              }
+              if (key == LogicalKeyboardKey.minus) {
+                _zoom = (_zoom - .1).clamp(.5, 3);
+              }
+            });
+            return KeyEventResult.handled;
+          },
+          child: Listener(
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent) {
+                GestureBinding.instance.pointerSignalResolver.register(
+                  event,
+                  (_) => _update(
+                    () =>
+                        _zoom = (_zoom * math.exp(-event.scrollDelta.dy * .001))
+                            .clamp(.5, 3),
+                  ),
+                );
+              }
+            },
+            child: GestureDetector(
+              key: const ValueKey('car-gesture'),
+              behavior: HitTestBehavior.opaque,
+              onScaleStart: (_) {
+                _focus.requestFocus();
+                _startZoom = _zoom;
+              },
+              onScaleUpdate: (d) => _update(() {
+                if (d.pointerCount > 1) {
+                  _zoom = (_startZoom * d.scale).clamp(.5, 3);
+                } else {
+                  _rotate(
+                    d.focalPointDelta.dx * .01,
+                    d.focalPointDelta.dy * .01,
+                  );
+                }
+              }),
+              onTapUp: (d) {
+                _focus.requestFocus();
+                final hit = _gltfReady && !_wire && !widget.componentOnly
+                    ? _gltfController.partAt(d.localPosition, size)
+                    : painter.partAt(d.localPosition, size);
+                if (hit != null) {
+                  _update(() => _selected = hit);
+                  widget.onComponentSelected?.call(hit);
+                }
+              },
+              child: RepaintBoundary(
+                child: SizedBox.fromSize(
+                  size: size,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (widget.enableGltf &&
+                          !widget.componentOnly &&
+                          _resumed &&
+                          !_gltfUnavailable &&
+                          !_wire &&
+                          !widget.ghostCompare)
+                        GltfCarStage(
+                          model: model,
+                          controller: _gltfController,
+                          yaw: _yaw,
+                          pitch: _pitch,
+                          zoom: _zoom,
+                          selected: _selected,
+                          team: _team,
+                          focus: _focusAnimation.value,
+                          exploded: _explodeAnimation.value,
+                          technical: _technical,
+                          onReady: () {
+                            if (mounted && !_gltfReady) {
+                              _update(() => _gltfReady = true);
+                            }
+                          },
+                          onUnavailable: () {
+                            if (mounted && !_gltfUnavailable) {
+                              _update(() {
+                                _gltfReady = false;
+                                _gltfUnavailable = true;
+                              });
+                            }
+                          },
+                        ),
+                      CustomPaint(
+                        key: const ValueKey('car-canvas'),
+                        painter: painter,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  List<Widget> _identity(
+    BuildContext context,
+    List<Map<String, dynamic>> archives,
+    Map<String, dynamic>? archive,
+  ) => [
+    Text(
+      tr(context, 'Explore the car'),
+      style: Theme.of(context).textTheme.headlineSmall,
+    ),
+    const SizedBox(height: 8),
+    Text(tr(context, 'Generic model — not a team specification.')),
+    const SizedBox(height: 12),
+    if (widget.showTeamSelector) ...[
+      Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final team in const [
+            CarTeam('neutral', 'Generic model'),
+            ...carTeams,
+          ])
+            ChoiceChip(
+              label: Text(team.name),
+              selected: _team == team.id,
+              onSelected: (_) => _update(() {
+                _team = team.id;
+                _archive = 'generic';
+                _compareArchive = null;
+                _compareMode = false;
+              }),
+            ),
+        ],
+      ),
+      const SizedBox(height: 12),
+    ],
+    if (!widget.showTeamSelector)
+      InputDecorator(
+        decoration: InputDecoration(labelText: tr(context, 'Car archive')),
+        child: Text(
+          widget.currentCarName == null
+              ? tr(context, 'Not available')
+              : '${widget.currentCarSeason} / ${widget.currentCarName}',
+        ),
+      )
+    else
+      DropdownButtonFormField<String>(
+        key: ValueKey('archive-$_team-$_archive'),
+        initialValue: _archive,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: tr(context, 'Car archive')),
+        items: [
+          DropdownMenuItem(
+            value: 'generic',
+            child: Text(tr(context, 'Generic illustration')),
+          ),
+          for (final car in archives)
+            DropdownMenuItem(
+              value: car['car_model_id'] as String,
+              child: Text('${car['season']} / ${car['name']}'),
+            ),
+        ],
+        onChanged: (value) {
+          if (value != null) {
+            final selected = archives.where(
+              (car) => car['car_model_id'] == value,
+            );
+            _update(() {
+              _archive = value;
+              _compareArchive = selected.isEmpty
+                  ? null
+                  : selected.first['previous_car_model_id'] as String?;
+              _compareMode = false;
+            });
+          }
+        },
+      ),
+    const SizedBox(height: 8),
+    Text(
+      tr(
+        context,
+        archive == null || !widget.showTeamSelector
+            ? 'Team-inspired colours only; not an official livery.'
+            : 'Identity verified; generation geometry unavailable. Showing the generic illustration.',
+      ),
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
+    if (!widget.showTeamSelector && widget.currentCarSourceUrl != null)
+      TextButton.icon(
+        onPressed: () => _official(widget.currentCarSourceUrl!),
+        icon: const Icon(Icons.open_in_new, size: 18),
+        label: Text(tr(context, 'Official Car')),
+      )
+    else if (archive?['official_url'] != null)
+      TextButton.icon(
+        onPressed: () => _official(archive!['official_url'] as String),
+        icon: const Icon(Icons.open_in_new, size: 18),
+        label: Text(tr(context, 'Official Car')),
+      ),
+    const SizedBox(height: 12),
+  ];
+
+  List<Widget> _tools(
+    BuildContext context,
+    CarModel model,
+    bool zh,
+    CarComponent component,
+    List<String> text,
+    List<Map<String, dynamic>> archives,
+    Map<String, dynamic>? archive,
+    Map<String, dynamic>? comparison,
+    List<Map<String, dynamic>> compareCandidates,
+    List<CompareChange> changes,
+  ) => [
+    Text(
+      tr(context, 'Drag to rotate · Pinch to zoom'),
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
+    const SizedBox(height: 8),
+    Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilterChip(
+          key: const ValueKey('focus-mode'),
+          avatar: const Icon(Icons.center_focus_strong, size: 18),
+          label: Text(tr(context, 'Focus component')),
+          selected: _focusMode,
+          onSelected: (_) => _toggleFocus(),
+        ),
+        FilterChip(
+          key: const ValueKey('exploded-mode'),
+          avatar: Icon(
+            _exploded ? Icons.compress : Icons.open_in_full,
+            size: 18,
+          ),
+          label: Text(tr(context, _exploded ? 'Assemble' : 'Deconstruct')),
+          selected: _exploded,
+          onSelected: (_) => _toggleExploded(),
+        ),
+        FilterChip(
+          key: const ValueKey('technical-mode'),
+          avatar: const Icon(Icons.architecture, size: 18),
+          label: Text(tr(context, _technical ? 'Technical' : 'Livery')),
+          selected: _technical,
+          onSelected: (value) => _update(() => _technical = value),
+        ),
+        FilterChip(
+          key: const ValueKey('compare-mode'),
+          avatar: const Icon(Icons.compare_arrows, size: 18),
+          label: Text(tr(context, 'Compare')),
+          selected: _compareMode,
+          onSelected: archive != null && comparison != null
+              ? (value) => _update(() => _compareMode = value)
+              : null,
+        ),
+      ],
+    ),
+    Wrap(
+      spacing: 4,
+      children: [
+        for (final view in [
+          ('Reset view', -.65, .55),
+          ('Front view', math.pi, .12),
+          ('Side view', math.pi / 2, .12),
+          ('Top view', 0.0, math.pi / 2 - .01),
+          ('Rear view', 0.0, .12),
+        ])
+          TextButton(
+            onPressed: () => _view(view.$2, view.$3),
+            child: Text(tr(context, view.$1)),
+          ),
+        IconButton(
+          tooltip: tr(context, 'Rotate left'),
+          onPressed: () => _update(() => _rotate(-.1, 0)),
+          icon: const Icon(Icons.rotate_left),
+        ),
+        IconButton(
+          tooltip: tr(context, 'Rotate right'),
+          onPressed: () => _update(() => _rotate(.1, 0)),
+          icon: const Icon(Icons.rotate_right),
+        ),
+        IconButton(
+          tooltip: tr(context, 'Zoom in'),
+          onPressed: () => _update(() => _zoom = (_zoom + .1).clamp(.5, 3)),
+          icon: const Icon(Icons.zoom_in),
+        ),
+        IconButton(
+          tooltip: tr(context, 'Zoom out'),
+          onPressed: () => _update(() => _zoom = (_zoom - .1).clamp(.5, 3)),
+          icon: const Icon(Icons.zoom_out),
+        ),
+      ],
+    ),
+    const SizedBox(height: 12),
+    if (_compareMode && archive != null && comparison != null) ...[
+      Text(
+        tr(context, 'Generation Compare'),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        key: ValueKey(
+          'compare-${archive['car_model_id']}-${comparison['car_model_id']}',
+        ),
+        initialValue: comparison['car_model_id'] as String,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: tr(context, 'Previous')),
+        items: [
+          for (final car in compareCandidates)
+            DropdownMenuItem(
+              value: car['car_model_id'] as String,
+              child: Text('${car['season']} / ${car['name']}'),
+            ),
+        ],
+        onChanged: (value) => _update(() => _compareArchive = value),
+      ),
+      const SizedBox(height: 16),
+      EvolutionComparePanel(
+        previous: '${comparison['season']} / ${comparison['name']}',
+        current: '${archive['season']} / ${archive['name']}',
+        changes: changes,
+        ghostAvailable: false,
+        ghostEnabled: false,
+        onGhostChanged: (_) {},
+        onComponentSelected: _focusPart,
+      ),
+      const SizedBox(height: 12),
+    ],
+    DropdownButtonFormField<String>(
+      key: ValueKey('component-$_selected'),
+      initialValue: _selected,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: tr(context, 'Car component')),
+      items: [
+        for (final c in model.components.where(
+          (c) => !widget.componentOnly || c.id == widget.highlightedComponentId,
+        ))
+          DropdownMenuItem(value: c.id, child: Text(c.text(zh)[0])),
+      ],
+      onChanged: (value) {
+        if (value != null) {
+          _update(() => _selected = value);
+          widget.onComponentSelected?.call(value);
+        }
+      },
+    ),
+    const SizedBox(height: 8),
+    Text(component.id, style: Theme.of(context).textTheme.bodySmall),
+    for (var i = 0; i < 3; i++)
+      Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr(
+                context,
+                ['What is it?', 'What does it do?', 'Why does it matter?'][i],
+              ),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(text[i + 1]),
+          ],
+        ),
+      ),
+    const SizedBox(height: 12),
+    Text(
+      tr(
+        context,
+        'Static draft awaiting human review. Current specification and upgrades: unavailable.',
+      ),
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(tr(context, 'Component labels')),
+      value: _labels,
+      onChanged: (v) => _update(() => _labels = v),
+    ),
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(tr(context, 'Wireframe')),
+      value: _wire,
+      onChanged: (v) => _update(() => _wire = v),
+    ),
+    if (archives.isNotEmpty)
+      ExpansionTile(
+        key: PageStorageKey('heritage-$_team'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        title: Text(tr(context, 'Heritage')),
+        children: [
+          for (final car
+              in archives.toList()..sort(
+                (a, b) => (a['season'] as int).compareTo(b['season'] as int),
+              ))
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              selected: car['car_model_id'] == _archive,
+              title: Text(car['name'] as String),
+              subtitle: Text('${car['season']}'),
+              onTap: () => _update(() {
+                _archive = car['car_model_id'] as String;
+                _compareArchive = car['previous_car_model_id'] as String?;
+                _compareMode = false;
+              }),
+              trailing: car['official_url'] == null
+                  ? null
+                  : IconButton(
+                      tooltip: tr(context, 'Official Car'),
+                      onPressed: () => _official(car['official_url'] as String),
+                      icon: const Icon(Icons.open_in_new),
+                    ),
+            ),
+        ],
+      ),
+  ];
+
   @override
   Widget build(BuildContext context) => FutureBuilder<CarModel>(
     future: _model,
@@ -182,7 +720,7 @@ class _CarViewerState extends State<CarViewer>
           children: [
             Text(tr(context, 'Unable to load the car model.')),
             TextButton(
-              onPressed: () => setState(() => _model = CarModel.load()),
+              onPressed: () => _update(() => _model = CarModel.load()),
               child: Text(tr(context, 'Retry')),
             ),
           ],
@@ -238,469 +776,108 @@ class _CarViewerState extends State<CarViewer>
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            tr(context, 'Explore the car'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          Text(tr(context, 'Generic model — not a team specification.')),
-          const SizedBox(height: 12),
-          if (widget.showTeamSelector) ...[
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
+          if (widget.editorial && !widget.componentOnly)
+            ExpansionTile(
+              // Store disclosure expansion separately from the page's scroll offset.
+              key: const PageStorageKey('car-archive'),
+              tilePadding: EdgeInsets.zero,
+              title: Text(tr(context, 'Car archive')),
+              children: _identity(context, archives, archive),
+            )
+          else if (!widget.editorial)
+            ..._identity(context, archives, archive),
+          if (_fullscreen)
+            const SizedBox(height: 220)
+          else
+            _stage(context, model, zh),
+          if (widget.editorial) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                tr(context, 'Drag · Pinch · Tap component'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                for (final team in const [
-                  CarTeam('neutral', 'Generic model'),
-                  ...carTeams,
-                ])
-                  ChoiceChip(
-                    label: Text(team.name),
-                    selected: _team == team.id,
-                    onSelected: (_) => setState(() {
-                      _team = team.id;
-                      _archive = 'generic';
-                      _compareArchive = null;
-                      _compareMode = false;
-                    }),
+                const Flexible(child: EditorialLabel('Generic illustration')),
+                if (!widget.componentOnly)
+                  IconButton(
+                    tooltip: tr(context, 'Reset view'),
+                    icon: const Icon(Icons.restart_alt, size: 20),
+                    onPressed: () {
+                      _viewIndex = 0;
+                      _view(-.65, .55);
+                    },
                   ),
+                IconButton(
+                  tooltip: tr(context, 'Fullscreen'),
+                  icon: const Icon(Icons.fullscreen),
+                  onPressed: () => _openFullscreen(model, zh),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-          ],
-          if (!widget.showTeamSelector)
-            InputDecorator(
-              decoration: InputDecoration(
-                labelText: tr(context, 'Car archive'),
+            if (!widget.componentOnly) ...[
+              EditorialTabs(
+                labels: const [
+                  'Front view',
+                  'Side view',
+                  'Top view',
+                  'Rear view',
+                ],
+                selected: _viewIndex - 1,
+                onChanged: (i) {
+                  _viewIndex = i + 1;
+                  final views = [
+                    (-.65, .55),
+                    (math.pi, .12),
+                    (math.pi / 2, .12),
+                    (0.0, math.pi / 2 - .01),
+                    (0.0, .12),
+                  ];
+                  _view(views[i + 1].$1, views[i + 1].$2);
+                },
               ),
-              child: Text(
-                widget.currentCarName == null
-                    ? tr(context, 'Not available')
-                    : '${widget.currentCarSeason} / ${widget.currentCarName}',
+              EditorialTabs(
+                labels: const ['Standard', 'Technical'],
+                selected: _technical ? 1 : 0,
+                onChanged: (i) => _update(() => _technical = i == 1),
+              ),
+            ],
+          ],
+          if (widget.editorial)
+            ExpansionTile(
+              key: const PageStorageKey('car-tools'),
+              title: Text(tr(context, 'Viewer tools & knowledge')),
+              tilePadding: EdgeInsets.zero,
+              children: _tools(
+                context,
+                model,
+                zh,
+                component,
+                text,
+                archives,
+                archive,
+                comparison,
+                compareCandidates,
+                changes,
               ),
             )
           else
-            DropdownButtonFormField<String>(
-              key: ValueKey('archive-$_team-$_archive'),
-              initialValue: _archive,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: tr(context, 'Car archive'),
-              ),
-              items: [
-                DropdownMenuItem(
-                  value: 'generic',
-                  child: Text(tr(context, 'Generic illustration')),
-                ),
-                for (final car in archives)
-                  DropdownMenuItem(
-                    value: car['car_model_id'] as String,
-                    child: Text('${car['season']} / ${car['name']}'),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  final selected = archives.where(
-                    (car) => car['car_model_id'] == value,
-                  );
-                  setState(() {
-                    _archive = value;
-                    _compareArchive = selected.isEmpty
-                        ? null
-                        : selected.first['previous_car_model_id'] as String?;
-                    _compareMode = false;
-                  });
-                }
-              },
-            ),
-          const SizedBox(height: 8),
-          Text(
-            tr(
+            ..._tools(
               context,
-              archive == null || !widget.showTeamSelector
-                  ? 'Team-inspired colours only; not an official livery.'
-                  : 'Identity verified; generation geometry unavailable. Showing the generic illustration.',
-            ),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          if (!widget.showTeamSelector && widget.currentCarSourceUrl != null)
-            TextButton.icon(
-              onPressed: () => _official(widget.currentCarSourceUrl!),
-              icon: const Icon(Icons.open_in_new, size: 18),
-              label: Text(tr(context, 'Official Car')),
-            )
-          else if (archive?['official_url'] != null)
-            TextButton.icon(
-              onPressed: () => _official(archive!['official_url'] as String),
-              icon: const Icon(Icons.open_in_new, size: 18),
-              label: Text(tr(context, 'Official Car')),
-            ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final size = Size(
-                constraints.maxWidth,
-                constraints.maxWidth < 500 ? 390 : 480,
-              );
-              final painter = CarPainter(
-                model: model,
-                yaw: _yaw,
-                pitch: _pitch,
-                zoom: _zoom,
-                selected: _selected,
-                team: _team,
-                labels: _labels,
-                wire: _wire,
-                scheme: Theme.of(context).colorScheme,
-                chinese: zh,
-                textScaler: MediaQuery.textScalerOf(context),
-                labelStyle: Theme.of(context).textTheme.labelMedium,
-                renderModel: !_gltfReady || _wire || widget.ghostCompare,
-                focus: _focusAnimation.value,
-                exploded: _explodeAnimation.value,
-                technical: _technical,
-                ghostCompare: widget.ghostCompare,
-                ghostComponentIds: widget.ghostComponentIds,
-              );
-              return Semantics(
-                label: tr(context, 'Interactive car model'),
-                value: text[0],
-                child: Focus(
-                  focusNode: _focus,
-                  onKeyEvent: (_, event) {
-                    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-                      return KeyEventResult.ignored;
-                    }
-                    final key = event.logicalKey;
-                    if (![
-                      LogicalKeyboardKey.arrowLeft,
-                      LogicalKeyboardKey.arrowRight,
-                      LogicalKeyboardKey.arrowUp,
-                      LogicalKeyboardKey.arrowDown,
-                      LogicalKeyboardKey.equal,
-                      LogicalKeyboardKey.add,
-                      LogicalKeyboardKey.minus,
-                    ].contains(key)) {
-                      return KeyEventResult.ignored;
-                    }
-                    setState(() {
-                      if (key == LogicalKeyboardKey.arrowLeft) _rotate(-.1, 0);
-                      if (key == LogicalKeyboardKey.arrowRight) _rotate(.1, 0);
-                      if (key == LogicalKeyboardKey.arrowUp) _rotate(0, .1);
-                      if (key == LogicalKeyboardKey.arrowDown) _rotate(0, -.1);
-                      if (key == LogicalKeyboardKey.equal ||
-                          key == LogicalKeyboardKey.add) {
-                        _zoom = (_zoom + .1).clamp(.5, 3);
-                      }
-                      if (key == LogicalKeyboardKey.minus) {
-                        _zoom = (_zoom - .1).clamp(.5, 3);
-                      }
-                    });
-                    return KeyEventResult.handled;
-                  },
-                  child: Listener(
-                    onPointerSignal: (event) {
-                      if (event is PointerScrollEvent) {
-                        GestureBinding.instance.pointerSignalResolver.register(
-                          event,
-                          (_) => setState(
-                            () => _zoom =
-                                (_zoom * math.exp(-event.scrollDelta.dy * .001))
-                                    .clamp(.5, 3),
-                          ),
-                        );
-                      }
-                    },
-                    child: GestureDetector(
-                      key: const ValueKey('car-gesture'),
-                      behavior: HitTestBehavior.opaque,
-                      onScaleStart: (_) {
-                        _focus.requestFocus();
-                        _startZoom = _zoom;
-                      },
-                      onScaleUpdate: (d) => setState(() {
-                        if (d.pointerCount > 1) {
-                          _zoom = (_startZoom * d.scale).clamp(.5, 3);
-                        } else {
-                          _rotate(
-                            d.focalPointDelta.dx * .01,
-                            d.focalPointDelta.dy * .01,
-                          );
-                        }
-                      }),
-                      onTapUp: (d) {
-                        _focus.requestFocus();
-                        final hit = _gltfReady && !_wire
-                            ? _gltfController.partAt(d.localPosition, size)
-                            : painter.partAt(d.localPosition, size);
-                        if (hit != null) {
-                          setState(() => _selected = hit);
-                          widget.onComponentSelected?.call(hit);
-                        }
-                      },
-                      child: RepaintBoundary(
-                        child: SizedBox.fromSize(
-                          size: size,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              if (widget.enableGltf &&
-                                  _resumed &&
-                                  !_gltfUnavailable &&
-                                  !_wire &&
-                                  !widget.ghostCompare)
-                                GltfCarStage(
-                                  model: model,
-                                  controller: _gltfController,
-                                  yaw: _yaw,
-                                  pitch: _pitch,
-                                  zoom: _zoom,
-                                  selected: _selected,
-                                  team: _team,
-                                  focus: _focusAnimation.value,
-                                  exploded: _explodeAnimation.value,
-                                  technical: _technical,
-                                  onReady: () {
-                                    if (mounted && !_gltfReady) {
-                                      setState(() => _gltfReady = true);
-                                    }
-                                  },
-                                  onUnavailable: () {
-                                    if (mounted && !_gltfUnavailable) {
-                                      setState(() {
-                                        _gltfReady = false;
-                                        _gltfUnavailable = true;
-                                      });
-                                    }
-                                  },
-                                ),
-                              CustomPaint(
-                                key: const ValueKey('car-canvas'),
-                                painter: painter,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          Text(
-            tr(context, 'Drag to rotate · Pinch to zoom'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilterChip(
-                key: const ValueKey('focus-mode'),
-                avatar: const Icon(Icons.center_focus_strong, size: 18),
-                label: Text(tr(context, 'Focus component')),
-                selected: _focusMode,
-                onSelected: (_) => _toggleFocus(),
-              ),
-              FilterChip(
-                key: const ValueKey('exploded-mode'),
-                avatar: Icon(
-                  _exploded ? Icons.compress : Icons.open_in_full,
-                  size: 18,
-                ),
-                label: Text(
-                  tr(context, _exploded ? 'Assemble' : 'Deconstruct'),
-                ),
-                selected: _exploded,
-                onSelected: (_) => _toggleExploded(),
-              ),
-              FilterChip(
-                key: const ValueKey('technical-mode'),
-                avatar: const Icon(Icons.architecture, size: 18),
-                label: Text(tr(context, _technical ? 'Technical' : 'Livery')),
-                selected: _technical,
-                onSelected: (value) => setState(() => _technical = value),
-              ),
-              FilterChip(
-                key: const ValueKey('compare-mode'),
-                avatar: const Icon(Icons.compare_arrows, size: 18),
-                label: Text(tr(context, 'Compare')),
-                selected: _compareMode,
-                onSelected: archive != null && comparison != null
-                    ? (value) => setState(() => _compareMode = value)
-                    : null,
-              ),
-            ],
-          ),
-          Wrap(
-            spacing: 4,
-            children: [
-              for (final view in [
-                ('Reset view', -.65, .55),
-                ('Front view', math.pi, .12),
-                ('Side view', math.pi / 2, .12),
-                ('Top view', 0.0, math.pi / 2 - .01),
-                ('Rear view', 0.0, .12),
-              ])
-                TextButton(
-                  onPressed: () => _view(view.$2, view.$3),
-                  child: Text(tr(context, view.$1)),
-                ),
-              IconButton(
-                tooltip: tr(context, 'Rotate left'),
-                onPressed: () => setState(() => _rotate(-.1, 0)),
-                icon: const Icon(Icons.rotate_left),
-              ),
-              IconButton(
-                tooltip: tr(context, 'Rotate right'),
-                onPressed: () => setState(() => _rotate(.1, 0)),
-                icon: const Icon(Icons.rotate_right),
-              ),
-              IconButton(
-                tooltip: tr(context, 'Zoom in'),
-                onPressed: () =>
-                    setState(() => _zoom = (_zoom + .1).clamp(.5, 3)),
-                icon: const Icon(Icons.zoom_in),
-              ),
-              IconButton(
-                tooltip: tr(context, 'Zoom out'),
-                onPressed: () =>
-                    setState(() => _zoom = (_zoom - .1).clamp(.5, 3)),
-                icon: const Icon(Icons.zoom_out),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (_compareMode && archive != null && comparison != null) ...[
-            Text(
-              tr(context, 'Generation Compare'),
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              key: ValueKey(
-                'compare-${archive['car_model_id']}-${comparison['car_model_id']}',
-              ),
-              initialValue: comparison['car_model_id'] as String,
-              isExpanded: true,
-              decoration: InputDecoration(labelText: tr(context, 'Previous')),
-              items: [
-                for (final car in compareCandidates)
-                  DropdownMenuItem(
-                    value: car['car_model_id'] as String,
-                    child: Text('${car['season']} / ${car['name']}'),
-                  ),
-              ],
-              onChanged: (value) => setState(() => _compareArchive = value),
-            ),
-            const SizedBox(height: 16),
-            EvolutionComparePanel(
-              previous: '${comparison['season']} / ${comparison['name']}',
-              current: '${archive['season']} / ${archive['name']}',
-              changes: changes,
-              ghostAvailable: false,
-              ghostEnabled: false,
-              onGhostChanged: (_) {},
-              onComponentSelected: _focusPart,
-            ),
-            const SizedBox(height: 12),
-          ],
-          DropdownButtonFormField<String>(
-            key: ValueKey('component-$_selected'),
-            initialValue: _selected,
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: tr(context, 'Car component'),
-            ),
-            items: [
-              for (final c in model.components)
-                DropdownMenuItem(value: c.id, child: Text(c.text(zh)[0])),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _selected = value);
-                widget.onComponentSelected?.call(value);
-              }
-            },
-          ),
-          const SizedBox(height: 8),
-          Text(component.id, style: Theme.of(context).textTheme.bodySmall),
-          for (var i = 0; i < 3; i++)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tr(
-                      context,
-                      [
-                        'What is it?',
-                        'What does it do?',
-                        'Why does it matter?',
-                      ][i],
-                    ),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(text[i + 1]),
-                ],
-              ),
-            ),
-          const SizedBox(height: 12),
-          Text(
-            tr(
-              context,
-              'Static draft awaiting human review. Current specification and upgrades: unavailable.',
-            ),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(tr(context, 'Component labels')),
-            value: _labels,
-            onChanged: (v) => setState(() => _labels = v),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(tr(context, 'Wireframe')),
-            value: _wire,
-            onChanged: (v) => setState(() => _wire = v),
-          ),
-          if (archives.isNotEmpty)
-            ExpansionTile(
-              key: ValueKey('heritage-$_team'),
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: EdgeInsets.zero,
-              title: Text(tr(context, 'Heritage')),
-              children: [
-                for (final car
-                    in archives.toList()..sort(
-                      (a, b) =>
-                          (a['season'] as int).compareTo(b['season'] as int),
-                    ))
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    selected: car['car_model_id'] == _archive,
-                    title: Text(car['name'] as String),
-                    subtitle: Text('${car['season']}'),
-                    onTap: () => setState(() {
-                      _archive = car['car_model_id'] as String;
-                      _compareArchive = car['previous_car_model_id'] as String?;
-                      _compareMode = false;
-                    }),
-                    trailing: car['official_url'] == null
-                        ? null
-                        : IconButton(
-                            tooltip: tr(context, 'Official Car'),
-                            onPressed: () =>
-                                _official(car['official_url'] as String),
-                            icon: const Icon(Icons.open_in_new),
-                          ),
-                  ),
-              ],
+              model,
+              zh,
+              component,
+              text,
+              archives,
+              archive,
+              comparison,
+              compareCandidates,
+              changes,
             ),
         ],
       );
@@ -724,6 +901,7 @@ class CarPainter extends CustomPainter {
   final String selected, team;
   final bool labels, wire, chinese;
   final bool renderModel;
+  final bool isolated;
   final bool technical;
   final bool ghostCompare;
   final Set<String> ghostComponentIds;
@@ -752,6 +930,7 @@ class CarPainter extends CustomPainter {
     this.ghostCompare = false,
     this.ghostComponentIds = const {},
     this.renderModel = true,
+    this.isolated = false,
   });
 
   (Offset, double) _project(CarPoint p, Size size, [String? part]) {
@@ -777,8 +956,42 @@ class CarPainter extends CustomPainter {
     _cachedSize = size;
     _cachedFaces = [
       for (final c in model.components)
-        for (final f in c.faces) _makeFace(c.id, f, size),
+        if (!isolated || c.id == selected)
+          for (final f in c.faces) _makeFace(c.id, f, size),
     ];
+    if (isolated && _cachedFaces.isNotEmpty) {
+      final bounds = _cachedFaces
+          .map((f) => f.path.getBounds())
+          .reduce((a, b) => a.expandToInclude(b));
+      final fit =
+          zoom *
+          math.min(
+            (size.width - 16) / math.max(bounds.width, 1),
+            (size.height - 16) / math.max(bounds.height, 1),
+          );
+      final matrix = Float64List.fromList([
+        fit,
+        0,
+        0,
+        0,
+        0,
+        fit,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        size.width / 2 - bounds.center.dx * fit,
+        size.height / 2 - bounds.center.dy * fit,
+        0,
+        1,
+      ]);
+      _cachedFaces = [
+        for (final f in _cachedFaces)
+          _Face(f.part, f.path.transform(matrix), f.depth, f.source),
+      ];
+    }
     _cachedFaces.sort((a, b) => a.depth.compareTo(b.depth));
     return _cachedFaces;
   }
@@ -807,7 +1020,7 @@ class CarPainter extends CustomPainter {
     if (renderModel) {
       for (final f in _faces(size)) {
         final active = f.part == selected;
-        final base = active
+        final base = active && !isolated
             ? scheme.primary
             : switch (f.source.material) {
                 'tyre' => const Color(0xff303338),
@@ -831,7 +1044,9 @@ class CarPainter extends CustomPainter {
         canvas.drawPath(
           f.path,
           Paint()
-            ..color = (wire
+            ..color = (isolated
+                ? scheme.primary
+                : wire
                 ? active
                       ? scheme.primary
                       : scheme.outline
@@ -945,6 +1160,7 @@ class CarPainter extends CustomPainter {
       focus != old.focus ||
       exploded != old.exploded ||
       technical != old.technical ||
+      isolated != old.isolated ||
       ghostCompare != old.ghostCompare ||
       ghostComponentIds != old.ghostComponentIds ||
       chinese != old.chinese ||

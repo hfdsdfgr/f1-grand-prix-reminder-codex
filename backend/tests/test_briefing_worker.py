@@ -14,6 +14,7 @@ from app.evolution_worker.sources import CollectionResult, OfficialSourceDiscove
 from app.models import RaceFeed
 from app.providers.jolpica import normalize
 from app.repositories.schedules import ScheduleRepository
+from app.results import ResultsRepository
 from test_schedules import sample
 
 
@@ -61,6 +62,12 @@ class BriefingWorkerTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM race_briefs').fetchone()[0], 1)
             self.assertEqual(db.execute('SELECT count(*) FROM briefing_evidence').fetchone()[0], 1)
             self.assertEqual(db.execute('SELECT count(*) FROM ai_generations').fetchone()[0], 1)
+        insight = ResultsRepository(self.path).briefing(2026, 1).insights[0]
+        self.assertEqual(insight.field, 'tyres')
+        self.assertEqual(insight.evidence[0].quote, 'tyre degradation was manageable during the race')
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute("UPDATE briefing_evidence SET quote='Unsupported quotation'")
+        self.assertEqual(ResultsRepository(self.path).briefing(2026, 1).insights[0].evidence, [])
 
     async def test_no_source_is_a_successful_empty_result(self):
         result = await execute_briefing(self.path, '2026-1', [])

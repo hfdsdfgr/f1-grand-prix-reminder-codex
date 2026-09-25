@@ -18,6 +18,7 @@ import '../home/reminder_controls.dart';
 
 class RaceDetailPage extends StatefulWidget {
   final Race race;
+  final String? section;
   final RaceRepository repository;
   final ReminderService? reminders;
   final Future<void> Function(bool)? syncReminders;
@@ -27,6 +28,7 @@ class RaceDetailPage extends StatefulWidget {
   const RaceDetailPage({
     super.key,
     required this.race,
+    this.section,
     required this.repository,
     this.reminders,
     this.syncReminders,
@@ -93,6 +95,17 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
   @override
   Widget build(BuildContext context) {
     final race = widget.race;
+    if (widget.section != null) {
+      if (widget.spoilerHidden && !_revealed) {
+        return _SpoilerGate(
+          onReveal: () {
+            setState(() => _revealed = true);
+            widget.onReveal?.call();
+          },
+        );
+      }
+      return widget.section == 'analysis' ? _analysis() : _results();
+    }
     return Scaffold(
       appBar: AppBar(title: Text(tr(context, 'Race details'))),
       body: SafeArea(
@@ -184,6 +197,35 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
     );
   }
 
+  Widget _analysis() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _RaceStory(
+        future: _loadStory(),
+        saved: _savedStory,
+        layout: widget.race.circuitLayout,
+        onTurnSelected: (turn) => setState(() => _selectedTurn = turn),
+        onSaved: (story) => _savedStory = story,
+        onRetry: _refreshStory,
+      ),
+      const SizedBox(height: 32),
+      _RaceStrategy(
+        future: _loadStrategy(),
+        saved: _savedStrategy,
+        onSaved: (strategy) => _savedStrategy = strategy,
+        onRetry: _refreshStrategy,
+      ),
+      const SizedBox(height: 32),
+      _ChampionshipImpact(
+        future: _loadImpact(),
+        saved: _savedImpact,
+        onSaved: (impact) => _savedImpact = impact,
+        onRetry: _refreshImpact,
+      ),
+      const SizedBox(height: 32),
+    ],
+  );
+
   Widget _results() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -261,7 +303,7 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
               ],
               for (final entry in _ordered(feed.entries)) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -319,60 +361,39 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                 ),
                 const Divider(),
               ],
-              if (!_qualifying) ...[
+              if (!_qualifying && widget.section == null) ...[
                 const SizedBox(height: 24),
-                _RaceStory(
-                  future: _loadStory(),
-                  saved: _savedStory,
-                  layout: widget.race.circuitLayout,
-                  onTurnSelected: (turn) =>
-                      setState(() => _selectedTurn = turn),
-                  onSaved: (story) => _savedStory = story,
-                  onRetry: _refreshStory,
-                ),
-                const SizedBox(height: 32),
-                _RaceStrategy(
-                  future: _loadStrategy(),
-                  saved: _savedStrategy,
-                  onSaved: (strategy) => _savedStrategy = strategy,
-                  onRetry: _refreshStrategy,
-                ),
-                const SizedBox(height: 32),
-                _ChampionshipImpact(
-                  future: _loadImpact(),
-                  saved: _savedImpact,
-                  onSaved: (impact) => _savedImpact = impact,
-                  onRetry: _refreshImpact,
-                ),
-                const SizedBox(height: 32),
-                RaceBriefingView(
-                  repository: widget.repository,
-                  raceId: widget.race.id,
-                  follows: widget.follows,
-                ),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: Text(tr(context, 'Evolution'))),
-                        body: SafeArea(
-                          child: SingleChildScrollView(
-                            padding: RaceSpace.page,
-                            child: EvolutionPage(
-                              repository: widget.repository,
-                              raceId: widget.race.id,
-                              follows: widget.follows,
-                              enableGltf: false,
+                _analysis(),
+                if (widget.section == null) ...[
+                  RaceBriefingView(
+                    repository: widget.repository,
+                    raceId: widget.race.id,
+                    follows: widget.follows,
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => Scaffold(
+                          appBar: AppBar(title: Text(tr(context, 'Evolution'))),
+                          body: SafeArea(
+                            child: SingleChildScrollView(
+                              padding: RaceSpace.page,
+                              child: EvolutionPage(
+                                repository: widget.repository,
+                                raceId: widget.race.id,
+                                follows: widget.follows,
+                                enableGltf: false,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
+                    icon: const Icon(Icons.build_outlined),
+                    label: Text(tr(context, 'Evolution')),
                   ),
-                  icon: const Icon(Icons.build_outlined),
-                  label: Text(tr(context, 'Evolution')),
-                ),
+                ],
               ],
               Text(
                 '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',

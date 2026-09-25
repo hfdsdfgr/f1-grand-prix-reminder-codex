@@ -162,13 +162,17 @@ void main() {
     await tester.ensureVisible(unmappedEvent);
     await tester.tap(unmappedEvent);
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(ExpansionTile));
+    await tester.ensureVisible(find.byKey(const ValueKey('unmapped')));
+    await tester.tap(find.byKey(const ValueKey('unmapped')));
     await tester.pumpAndSettle();
     expect(
       find.text('This upgrade has no compatible 3D component mapping.'),
       findsOneWidget,
     );
     expect((car.painter! as CarPainter).selected, 'floor');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(event);
     await tester.tap(event);
     await tester.pumpAndSettle();
     final compare = find.byKey(const ValueKey('specification-compare'));
@@ -176,21 +180,20 @@ void main() {
     await tester.tap(compare);
     await tester.pumpAndSettle();
     expect(find.text('Launch specification'), findsOneWidget);
-    expect(find.textContaining('New edge'), findsOneWidget);
+    expect(find.textContaining('New edge'), findsWidgets);
     expect(
       tester
           .widget<SwitchListTile>(find.byKey(const ValueKey('ghost-compare')))
           .onChanged,
       isNull,
     );
-    await tester.ensureVisible(find.byType(ExpansionTile));
-    await tester.tap(find.byType(ExpansionTile));
+    await tester.ensureVisible(find.byKey(const ValueKey('u')));
+    await tester.tap(find.byKey(const ValueKey('u')));
     await tester.pumpAndSettle();
     expect(find.text('https://example.com/test'), findsOneWidget);
-    expect(
-      find.text('Low-confidence AI assessment. Check the linked source.'),
-      findsOneWidget,
-    );
+    expect(find.text('Low · 0.62'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     final teamSelector = find.byType(DropdownButtonFormField<String>).first;
     await tester.ensureVisible(teamSelector);
     await tester.tap(teamSelector);
@@ -205,17 +208,10 @@ void main() {
     await tester.tap(compare);
     await tester.pumpAndSettle();
     final ghost = find.byKey(const ValueKey('ghost-compare'));
-    expect(tester.widget<SwitchListTile>(ghost).onChanged, isNotNull);
-    await tester.ensureVisible(ghost);
-    await tester.tap(ghost);
-    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(ghost).onChanged, isNull);
     expect(
-      (tester
-                  .widget<CustomPaint>(find.byKey(const ValueKey('car-canvas')))
-                  .painter!
-              as CarPainter)
-          .ghostCompare,
-      isTrue,
+      find.text('Two verified generation geometries are required.'),
+      findsOneWidget,
     );
     expect(find.textContaining('modified'), findsWidgets);
     expect(tester.takeException(), isNull);

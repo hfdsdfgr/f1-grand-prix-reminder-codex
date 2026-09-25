@@ -151,8 +151,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.getTopLeft(find.text('Driver concerns')).dy,
-      lessThan(tester.getTopLeft(find.text('Other')).dy),
+      tester.getTopLeft(find.text('DRIVER CONCERNS')).dy,
+      lessThan(tester.getTopLeft(find.text('OTHER')).dy),
     );
   });
 

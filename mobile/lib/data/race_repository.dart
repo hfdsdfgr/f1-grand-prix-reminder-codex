@@ -72,6 +72,7 @@ class CircuitCorner {
 class Race {
   final String id, name, circuit, date, source;
   final int season;
+  final int? round, totalRounds;
   final String? internalId, circuitId;
   final String status;
   final String lifecyclePhase;
@@ -83,6 +84,8 @@ class Race {
   final List<RaceSession> sessions;
   Race(Map<String, dynamic> json)
     : id = json['id'] as String,
+      round = json['round'] as int?,
+      totalRounds = json['total_rounds'] as int?,
       season =
           json['season'] as int? ?? DateTime.parse(json['date'] as String).year,
       internalId = json['internal_id'] as String?,
@@ -243,6 +246,16 @@ class RaceRepository {
     return RaceBriefingFeed(body);
   }
 
+  Future<List<EditorialMedia>> media(String raceId) async {
+    final (json, _) = await _get(
+      '/api/v1/races/${Uri.encodeComponent(raceId)}/media',
+      const Duration(seconds: 15),
+    );
+    return (json as List)
+        .map((item) => EditorialMedia(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<SeasonRosterFeed> roster(int season) async {
     final path = '/api/v1/seasons/$season/roster';
     final (json, cached) = await _get(path, const Duration(seconds: 20));
@@ -291,7 +304,7 @@ class UpgradeEntry {
       status = evolutionLifecycleStatuses.contains(json['status'])
           ? json['status'] as String
           : 'unknown',
-      confidence = json['confidence'] as String,
+      confidence = json['confidence']?.toString() ?? '',
       raceId = json['race_id'] as String?,
       race = json['race'] as String?,
       round = json['round'] as int?,
@@ -520,11 +533,25 @@ class ChampionshipImpactFeed {
       stale = json['stale'] as bool;
 }
 
+class BriefingEvidence {
+  final String quote;
+  final BriefingSource source;
+  BriefingEvidence(Map<String, dynamic> json)
+    : quote = json['quote'] as String,
+      source = BriefingSource(json['source'] as Map<String, dynamic>);
+}
+
 class BriefingInsight {
   final String topic, detail;
+  final String? field;
+  final List<BriefingEvidence> evidence;
   final List<BriefingSource> sources;
   BriefingInsight(Map<String, dynamic> json)
-    : topic = json['topic'] as String,
+    : field = json['field'] as String?,
+      evidence = (json['evidence'] as List<dynamic>? ?? const [])
+          .map((e) => BriefingEvidence(e as Map<String, dynamic>))
+          .toList(),
+      topic = json['topic'] as String,
       detail = json['detail'] as String,
       sources = (json['sources'] as List<dynamic>? ?? const [])
           .map((item) => BriefingSource(item as Map<String, dynamic>))
@@ -559,4 +586,20 @@ class RaceBriefingFeed {
           .toList(),
       updatedAt = DateTime.parse(json['updated_at'] as String).toLocal(),
       stale = json['stale'] as bool? ?? false;
+}
+
+class EditorialMedia {
+  final String id, role, url, sourceUrl, credit, license, caption;
+  final String? topic;
+  final bool spoiler;
+  EditorialMedia(Map<String, dynamic> json)
+    : id = json['id'] as String,
+      role = json['role'] as String,
+      url = json['url'] as String,
+      sourceUrl = json['source_url'] as String,
+      credit = json['credit'] as String,
+      license = json['license'] as String,
+      caption = json['caption'] as String,
+      topic = json['topic'] as String?,
+      spoiler = json['spoiler'] as bool? ?? true;
 }

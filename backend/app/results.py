@@ -142,9 +142,16 @@ class BriefingSource(BaseModel):
     published_at: datetime | None = None
 
 
+class BriefingEvidence(BaseModel):
+    quote: str
+    source: BriefingSource
+
+
 class BriefingInsight(BaseModel):
     topic: str
     detail: str
+    field: str | None = None
+    evidence: list[BriefingEvidence] = Field(default_factory=list)
     sources: list[BriefingSource] = Field(default_factory=list)
 
 
@@ -776,7 +783,7 @@ class ResultsRepository:
                 WHERE item.snapshot_id=? AND item.entity_type='interview' ''',
                 (brief[8], brief[8])))
             evidence_rows = [] if not brief else list(db.execute('''SELECT e.field,i.source_provider,
-                i.source_url,i.published_at FROM briefing_evidence e JOIN interviews i USING(interview_id)
+                i.source_url,i.published_at,e.quote,i.original_text FROM briefing_evidence e JOIN interviews i USING(interview_id)
                 WHERE e.race_brief_id=?''', (brief[0],)))
         sources, seen = [], set()
         updated_at = None
@@ -792,10 +799,14 @@ class ResultsRepository:
                 except ValueError:
                     pass
         by_field: dict[str, list[BriefingSource]] = {}
-        for field, provider, url, published_at in evidence_rows:
+        anchors: dict[str, list[BriefingEvidence]] = {}
+        for field, provider, url, published_at, quote, original in evidence_rows:
             if isinstance(url, str) and url.startswith(('https://', 'http://')):
                 by_field.setdefault(field, []).append(BriefingSource(
                     provider=provider, url=url, published_at=published_at))
+                if quote and original and ' '.join(quote.casefold().split()) in ' '.join(original.casefold().split()):
+                    anchors.setdefault(field, []).append(BriefingEvidence(
+                        quote=quote, source=BriefingSource(provider=provider, url=url, published_at=published_at)))
         fields = (
             ('Technical themes', 1, 'technical_themes'), ('Team performance', 2, 'team_performance'),
             ('Tyre issues', 3, 'tyres'), ('Strategy issues', 4, 'strategy'),
@@ -813,7 +824,7 @@ class ResultsRepository:
                         continue
                     seed_canonical(db, 'brief_fact', brief[0], {field: brief[index]})
                     insights.append(BriefingInsight(
-                        topic=topic,
+                        topic=topic, field=field, evidence=anchors.get(field, []),
                         detail=text(db, 'brief_fact', brief[0], field, language, brief[index]) or brief[index],
                         sources=by_field.get(field, sources),
                     ))

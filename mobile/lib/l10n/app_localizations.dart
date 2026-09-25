@@ -129,6 +129,252 @@ abstract class AppLocalizations {
   /// **'English'**
   String get english;
 
+  /// No description provided for @s_5d12ee2473eb.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed races first'**
+  String get s_5d12ee2473eb;
+
+  /// No description provided for @s_ec7b59833520.
+  ///
+  /// In en, this message translates to:
+  /// **'Round'**
+  String get s_ec7b59833520;
+
+  /// No description provided for @s_4f46c4af96ea.
+  ///
+  /// In en, this message translates to:
+  /// **'Cadillac F1 Team'**
+  String get s_4f46c4af96ea;
+
+  /// No description provided for @s_4e312f5c76bd.
+  ///
+  /// In en, this message translates to:
+  /// **'RB F1 Team'**
+  String get s_4e312f5c76bd;
+
+  /// No description provided for @s_146c89d5ccc6.
+  ///
+  /// In en, this message translates to:
+  /// **'Barcelona Grand Prix'**
+  String get s_146c89d5ccc6;
+
+  /// No description provided for @s_b861b3b2a2b4.
+  ///
+  /// In en, this message translates to:
+  /// **'No recorded upgrades for this selection.'**
+  String get s_b861b3b2a2b4;
+
+  /// No description provided for @s_623de52267e2.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag · Pinch · Tap component'**
+  String get s_623de52267e2;
+
+  /// No description provided for @s_adab5090ac6a.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar'**
+  String get s_adab5090ac6a;
+
+  /// No description provided for @s_b965ae66fcc4.
+  ///
+  /// In en, this message translates to:
+  /// **'Explore'**
+  String get s_b965ae66fcc4;
+
+  /// No description provided for @s_87c82808e3f1.
+  ///
+  /// In en, this message translates to:
+  /// **'Key stories'**
+  String get s_87c82808e3f1;
+
+  /// No description provided for @s_7b0257ce75ad.
+  ///
+  /// In en, this message translates to:
+  /// **'Quotes'**
+  String get s_7b0257ce75ad;
+
+  /// No description provided for @s_62c7fcf46e27.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis'**
+  String get s_62c7fcf46e27;
+
+  /// No description provided for @s_43e924426fed.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened and what it means.'**
+  String get s_43e924426fed;
+
+  /// No description provided for @s_8c5862385dca.
+  ///
+  /// In en, this message translates to:
+  /// **'How the car changed this weekend.'**
+  String get s_8c5862385dca;
+
+  /// No description provided for @s_decd7ca80010.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest'**
+  String get s_decd7ca80010;
+
+  /// No description provided for @s_931e1a4b152a.
+  ///
+  /// In en, this message translates to:
+  /// **'View all'**
+  String get s_931e1a4b152a;
+
+  /// No description provided for @s_ed3624e32d8f.
+  ///
+  /// In en, this message translates to:
+  /// **'Briefing available'**
+  String get s_ed3624e32d8f;
+
+  /// No description provided for @s_33e5ce14a3d8.
+  ///
+  /// In en, this message translates to:
+  /// **'documented updates'**
+  String get s_33e5ce14a3d8;
+
+  /// No description provided for @s_abdc43daf2fa.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved content'**
+  String get s_abdc43daf2fa;
+
+  /// No description provided for @s_f6bb0f468a85.
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get s_f6bb0f468a85;
+
+  /// No description provided for @s_9e25a34e635a.
+  ///
+  /// In en, this message translates to:
+  /// **'Hours'**
+  String get s_9e25a34e635a;
+
+  /// No description provided for @s_092f99ea11a3.
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes'**
+  String get s_092f99ea11a3;
+
+  /// No description provided for @s_14ca480390f7.
+  ///
+  /// In en, this message translates to:
+  /// **'Local time'**
+  String get s_14ca480390f7;
+
+  /// No description provided for @s_6cc3364a242c.
+  ///
+  /// In en, this message translates to:
+  /// **'Open source'**
+  String get s_6cc3364a242c;
+
+  /// No description provided for @s_9ee91c105645.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open source.'**
+  String get s_9ee91c105645;
+
+  /// No description provided for @s_bc7819b34ff8.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get s_bc7819b34ff8;
+
+  /// No description provided for @s_dc3decbb9384.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get s_dc3decbb9384;
+
+  /// No description provided for @s_a0fb821bdaf9.
+  ///
+  /// In en, this message translates to:
+  /// **'Purpose'**
+  String get s_a0fb821bdaf9;
+
+  /// No description provided for @s_82fa7d52c89d.
+  ///
+  /// In en, this message translates to:
+  /// **'Confidence'**
+  String get s_82fa7d52c89d;
+
+  /// No description provided for @s_a124947cbd2d.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get s_a124947cbd2d;
+
+  /// No description provided for @s_9195c1116ccd.
+  ///
+  /// In en, this message translates to:
+  /// **'Review original evidence.'**
+  String get s_9195c1116ccd;
+
+  /// No description provided for @s_24d52bb5af2b.
+  ///
+  /// In en, this message translates to:
+  /// **'Original evidence'**
+  String get s_24d52bb5af2b;
+
+  /// No description provided for @s_0bbf0a23272c.
+  ///
+  /// In en, this message translates to:
+  /// **'No verified quotes are available.'**
+  String get s_0bbf0a23272c;
+
+  /// No description provided for @s_bb08d10b00a6.
+  ///
+  /// In en, this message translates to:
+  /// **'Fullscreen'**
+  String get s_bb08d10b00a6;
+
+  /// No description provided for @s_2dfa66079d9b.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get s_2dfa66079d9b;
+
+  /// No description provided for @s_20750c3d70b9.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewer tools & knowledge'**
+  String get s_20750c3d70b9;
+
+  /// No description provided for @s_09ca55ca52d2.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get s_09ca55ca52d2;
+
+  /// No description provided for @s_b94f001614e8.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing is unavailable.'**
+  String get s_b94f001614e8;
+
+  /// No description provided for @s_70951f0d20d9.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to share. Please try again.'**
+  String get s_70951f0d20d9;
+
+  /// No description provided for @s_da356f930040.
+  ///
+  /// In en, this message translates to:
+  /// **'Media unavailable'**
+  String get s_da356f930040;
+
+  /// No description provided for @s_d977a86b0b4b.
+  ///
+  /// In en, this message translates to:
+  /// **'Media credit'**
+  String get s_d977a86b0b4b;
+
   /// No description provided for @s_89b86ab0e66f.
   ///
   /// In en, this message translates to:

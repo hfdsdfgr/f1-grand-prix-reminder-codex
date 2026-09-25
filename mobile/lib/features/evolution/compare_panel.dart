@@ -56,9 +56,12 @@ class EvolutionComparePanel extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         title: Text(tr(context, 'Ghost Compare')),
         subtitle: Text(
-          tr(context, ghostAvailable
-              ? 'Overlay the previous race specification over the current car.'
-              : 'Two sourced race specifications are required.'),
+          tr(
+            context,
+            ghostAvailable
+                ? 'Overlay the previous geometry over the current car.'
+                : 'Two verified generation geometries are required.',
+          ),
         ),
         value: ghostEnabled,
         onChanged: ghostAvailable ? onGhostChanged : null,

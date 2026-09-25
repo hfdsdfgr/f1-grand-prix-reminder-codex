@@ -390,10 +390,13 @@ void main() {
       addTearDown(repo.dispose);
       await tester.pumpWidget(GrandPrixApp(repository: repo));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('赛事').last);
+      await tester.tap(find.text('赛历').last);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('查看详情'));
-      await tester.tap(find.text('查看详情'));
+      final calendarRequests = requests
+          .where((p) => p == '/api/v1/races')
+          .length;
+      await tester.ensureVisible(find.byKey(const ValueKey('calendar-2030-1')));
+      await tester.tap(find.byKey(const ValueKey('calendar-2030-1')));
       await tester.pumpAndSettle();
       expect(find.text('赛事详情'), findsOneWidget);
       expect(find.text('1:20.123'), findsOneWidget);
@@ -409,8 +412,11 @@ void main() {
       expect(requests.where((p) => p.endsWith('/results')).length, 1);
       await tester.tap(find.byType(BackButton));
       await tester.pumpAndSettle();
-      expect(find.text('查看详情'), findsOneWidget);
-      expect(requests.where((p) => p == '/api/v1/races').length, 1);
+      expect(find.byKey(const ValueKey('calendar-2030-1')), findsOneWidget);
+      expect(
+        requests.where((p) => p == '/api/v1/races').length,
+        calendarRequests,
+      );
     },
   );
 
@@ -442,9 +448,9 @@ void main() {
     addTearDown(repo.dispose);
     await tester.pumpWidget(GrandPrixApp(repository: repo));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('赛事').last);
+    await tester.tap(find.text('赛历').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('查看详情'));
+    await tester.tap(find.byKey(const ValueKey('calendar-2030-1')));
     await tester.pumpAndSettle();
     expect(find.text('无法加载成绩，请重试。'), findsOneWidget);
     await tester.tap(find.text('重试'));

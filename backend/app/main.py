@@ -17,6 +17,7 @@ from app.results import (
     StrategyFeed, RaceBriefing, build_race_story,
 )
 from app.repositories.schedules import ScheduleRepository
+from app.editorial_media import EditorialMedia, load_media
 
 
 @asynccontextmanager
@@ -51,8 +52,11 @@ def schedule(season: int) -> RaceFeed:
     try:
         feed = app.state.schedules.season(season)
         now = datetime.now(timezone.utc)
+        total_rounds = max((item.round for item in feed.races), default=0)
         return feed.model_copy(update={
-            'races': [with_lifecycle(race, now) for race in feed.races],
+            'races': [with_lifecycle(race, now).model_copy(update={
+                'total_rounds': total_rounds,
+            }) for race in feed.races],
         })
     except Exception as exc:
         raise HTTPException(503, 'Race data is temporarily unavailable. Please retry.') from exc
@@ -111,6 +115,14 @@ def data_health():
 
 
 RaceId = Annotated[str, Path(pattern=r'^(19[5-9][0-9]|20[0-9]{2}|2100)-([1-9][0-9]?)$')]
+
+
+@app.get('/api/v1/races/{race_id}/media', response_model=list[EditorialMedia])
+def editorial_media(race_id: RaceId):
+    try:
+        return load_media(race_id)
+    except Exception as exc:
+        raise HTTPException(503, 'Editorial media is temporarily unavailable.') from exc
 
 
 @app.get('/api/v1/evolution/{race_id}', response_model=EvolutionRaceDetail)

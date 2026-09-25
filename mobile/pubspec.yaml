@@ -18,14 +18,29 @@ dependencies:
   flutter_scene: 0.23.0
   vector_math: ^2.2.0
   hooks: ^2.0.2
+  share_plus: ^13.3.0
+  intl: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 flutter:
   generate: true
+  fonts:
+    - family: Newsreader
+      fonts:
+        - asset: assets/fonts/Newsreader.ttf
+    - family: Barlow
+      fonts:
+        - asset: assets/fonts/Barlow-Regular.ttf
+    - family: BarlowCondensed
+      fonts:
+        - asset: assets/fonts/BarlowCondensed-Regular.ttf
   uses-material-design: true
   assets:
+    - assets/fonts/Newsreader-OFL.txt
+    - assets/fonts/Barlow-OFL.txt
+    - assets/fonts/BarlowCondensed-OFL.txt
     - assets/circuits/
     - assets/evolution/car.json
     - flutter_scene_generated/

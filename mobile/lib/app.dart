@@ -30,6 +30,8 @@ class _GrandPrixAppState extends State<GrandPrixApp>
   late final RaceRepository _repository =
       widget.repository ?? RaceRepository(preferences: widget.preferences);
   int _index = 0;
+  bool _briefingOpen = false;
+  String? _briefingRaceId;
   late final ReminderService? _reminders = widget.preferences == null
       ? null
       : ReminderService(widget.preferences!);
@@ -148,113 +150,121 @@ class _GrandPrixAppState extends State<GrandPrixApp>
     theme: raceTheme(Brightness.light),
     darkTheme: raceTheme(Brightness.dark),
     themeMode: ThemeMode.dark,
-    home: Scaffold(
-      appBar: AppBar(
-        actions: [
-          IconButton(
-            tooltip: t('Settings'),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => SettingsPage(
-                  spoilerFree: _spoilerFree,
-                  onSpoilerFreeChanged: _changeSpoilerFree,
-                  follows: _follows,
-                  language: _language,
-                  onLanguageChanged: _changeLanguage,
-                ),
+    home: PopScope(
+      canPop: !_briefingOpen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _briefingOpen) setState(() => _briefingOpen = false);
+      },
+      child: Scaffold(
+        appBar: _index == 3 || (_index == 0 && !_briefingOpen)
+            ? null
+            : AppBar(
+                toolbarHeight: 44,
+                leading: _briefingOpen
+                    ? BackButton(
+                        onPressed: () => setState(() => _briefingOpen = false),
+                      )
+                    : null,
               ),
-            ),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-          PopupMenuButton<String?>(
-            tooltip: t('Language'),
-            icon: const Icon(Icons.translate),
-            initialValue: _language,
-            onSelected: _changeLanguage,
-            itemBuilder: (context) => [
-              CheckedPopupMenuItem<String?>(
-                value: null,
-                checked: _language == null,
-                child: Text(context.l10n.followSystem),
+        body: SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: RaceSpace.contentWidth,
               ),
-              CheckedPopupMenuItem<String?>(
-                value: 'zh-CN',
-                checked: _language == 'zh-CN',
-                child: Text(context.l10n.simplifiedChinese),
-              ),
-              CheckedPopupMenuItem<String?>(
-                value: 'en',
-                checked: _language == 'en',
-                child: Text(context.l10n.english),
-              ),
-            ],
-          ),
-        ],
-        title: const Text('GrandPrixReminder'),
-      ),
-      body: SafeArea(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: RaceSpace.contentWidth),
-            child: SingleChildScrollView(
-              key: ValueKey(_index),
-              padding: RaceSpace.page,
-              child: switch (_index) {
-                0 => HomePage(
-                  repository: _repository,
-                  reminders: _reminders,
-                  syncReminders: (request) =>
-                      _syncReminders(requestPermissions: request),
-                  spoilerFree: _spoilerFree,
-                  revealedSessions: _revealedSessions,
-                  onRevealSession: _revealSession,
-                  follows: _follows,
-                ),
-                1 => RacesPage(
-                  repository: _repository,
-                  reminders: _reminders,
-                  syncReminders: (request) =>
-                      _syncReminders(requestPermissions: request),
-                  spoilerFree: _spoilerFree,
-                  revealedSessions: _revealedSessions,
-                  onRevealSession: _revealSession,
-                  follows: _follows,
-                ),
-                2 => BriefingPage(
-                  repository: _repository,
-                  spoilerFree: _spoilerFree,
-                  revealedSessions: _revealedSessions,
-                  onRevealSession: _revealSession,
-                  follows: _follows,
-                ),
-                _ => EvolutionPage(repository: _repository, follows: _follows),
-              },
+              child: _index == 3
+                  ? SettingsPage(
+                      spoilerFree: _spoilerFree,
+                      onSpoilerFreeChanged: _changeSpoilerFree,
+                      follows: _follows,
+                      language: _language,
+                      onLanguageChanged: _changeLanguage,
+                    )
+                  : SingleChildScrollView(
+                      key: PageStorageKey(
+                        _briefingOpen
+                            ? 'briefing-$_briefingRaceId'
+                            : 'page-$_index',
+                      ),
+                      padding: RaceSpace.page,
+                      child: _briefingOpen && _index == 0
+                          ? BriefingPage(
+                              repository: _repository,
+                              initialRaceId: _briefingRaceId,
+                              spoilerFree: _spoilerFree,
+                              revealedSessions: _revealedSessions,
+                              onRevealSession: _revealSession,
+                              follows: _follows,
+                            )
+                          : switch (_index) {
+                              0 => HomePage(
+                                onOpenBriefing: (raceId) => setState(() {
+                                  _briefingRaceId = raceId;
+                                  _briefingOpen = true;
+                                }),
+                                repository: _repository,
+                                reminders: _reminders,
+                                syncReminders: (request) =>
+                                    _syncReminders(requestPermissions: request),
+                                spoilerFree: _spoilerFree,
+                                revealedSessions: _revealedSessions,
+                                onRevealSession: _revealSession,
+                                follows: _follows,
+                              ),
+                              1 => RacesPage(
+                                repository: _repository,
+                                reminders: _reminders,
+                                syncReminders: (request) =>
+                                    _syncReminders(requestPermissions: request),
+                                spoilerFree: _spoilerFree,
+                                revealedSessions: _revealedSessions,
+                                onRevealSession: _revealSession,
+                                follows: _follows,
+                              ),
+                              _ => EvolutionPage(
+                                repository: _repository,
+                                follows: _follows,
+                              ),
+                            },
+                    ),
             ),
           ),
         ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (index) => setState(() => _index = index),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.flag_outlined),
-            label: t('Home'),
+        bottomNavigationBar: DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border(
+              top: BorderSide(color: Color(0xFF3B4143), width: .5),
+            ),
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.calendar_month_outlined),
-            label: t('Races'),
+          child: NavigationBar(
+            selectedIndex: _index,
+            onDestinationSelected: (index) => setState(() {
+              _index = index;
+              _briefingOpen = false;
+            }),
+            destinations: [
+              NavigationDestination(
+                icon: const Icon(Icons.home_outlined),
+                selectedIcon: const Icon(Icons.home),
+                label: t('Home'),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: t('Calendar'),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.explore_outlined),
+                selectedIcon: const Icon(Icons.explore),
+                label: t('Explore'),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.settings_outlined),
+                label: t('Settings'),
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.article_outlined),
-            label: t('Briefing'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.build_outlined),
-            label: t('Evolution'),
-          ),
-        ],
+        ),
       ),
     ),
   );

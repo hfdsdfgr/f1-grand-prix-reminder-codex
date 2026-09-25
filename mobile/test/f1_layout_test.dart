@@ -38,6 +38,14 @@ void main() {
         'MaterialIcons',
       )..addFont(icons.readAsBytes().then(ByteData.sublistView))).load();
     }
+    for (final font in ['Newsreader', 'BarlowCondensed', 'Barlow']) {
+      final path = font == 'Newsreader'
+          ? 'assets/fonts/Newsreader.ttf'
+          : 'assets/fonts/$font-Regular.ttf';
+      await (FontLoader(
+        font,
+      )..addFont(File(path).readAsBytes().then(ByteData.sublistView))).load();
+    }
     final font = File(
       '../.tools/flutter/engine/src/flutter/txt/third_party/fonts/Roboto-Regular.ttf',
     );
@@ -95,7 +103,10 @@ void main() {
             } else {
               data = {
                 'race': fixture(),
-                'races': [fixture(), completedRace()],
+                'races': [
+                  fixture(),
+                  {...completedRace(), 'id': '2030-2'},
+                ],
                 'stale': false,
                 'updated_at': '2030-09-13T00:00:00Z',
               };
@@ -127,10 +138,7 @@ void main() {
           final standalone = ['settings', 'results'].contains(entry.key);
           await t.pumpWidget(
             MaterialApp(
-              theme: raceTheme(Brightness.dark).copyWith(
-                textTheme: raceTheme(Brightness.dark).textTheme
-                    .apply(fontFamily: 'PreviewFont'),
-              ),
+              theme: raceTheme(Brightness.dark),
               home: RepaintBoundary(
                 key: const ValueKey('f1-screen'),
                 child: standalone
@@ -145,13 +153,14 @@ void main() {
             ),
           );
           if (entry.key == 'evolution') {
-            for (var i = 0;
-                i < 100 &&
-                    !t.any(find.byKey(const ValueKey('car-canvas')));
-                i++) {
-              await t.runAsync(() => Future<void>.delayed(
-                    const Duration(milliseconds: 10),
-                  ));
+            for (
+              var i = 0;
+              i < 100 && !t.any(find.byKey(const ValueKey('car-canvas')));
+              i++
+            ) {
+              await t.runAsync(
+                () => Future<void>.delayed(const Duration(milliseconds: 10)),
+              );
               await t.pump();
             }
           }
@@ -162,7 +171,7 @@ void main() {
           }
           expect(t.takeException(), isNull, reason: entry.key);
           if (entry.key == 'briefing') {
-            expect(find.text('Driver feedback'), findsOneWidget);
+            expect(find.text('DRIVER FEEDBACK'), findsOneWidget);
           }
           if (entry.key == 'results') {
             expect(find.text('1. Test Driver'), findsOneWidget);

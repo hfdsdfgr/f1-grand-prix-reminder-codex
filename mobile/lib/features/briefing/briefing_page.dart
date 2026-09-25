@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../shared/presentation.dart';
+import '../../shared/editorial.dart';
+import '../../shared/editorial_media.dart';
+import '../races/race_detail_page.dart';
 
 import '../../core/language.dart';
 import '../../core/spoilers.dart';
@@ -10,6 +13,7 @@ import '../../shared/race_briefing_view.dart';
 
 class BriefingPage extends StatefulWidget {
   final RaceRepository repository;
+  final String? initialRaceId;
   final bool spoilerFree;
   final Set<String> revealedSessions;
   final ValueChanged<String>? onRevealSession;
@@ -17,6 +21,7 @@ class BriefingPage extends StatefulWidget {
   const BriefingPage({
     super.key,
     required this.repository,
+    this.initialRaceId,
     this.spoilerFree = false,
     this.revealedSessions = const {},
     this.onRevealSession,
@@ -28,18 +33,20 @@ class BriefingPage extends StatefulWidget {
 }
 
 class _BriefingPageState extends State<BriefingPage> {
-  String? _raceId;
+  late String? _raceId = widget.initialRaceId;
+  int _tab = 0;
+  final Set<String> _revealed = {};
+  int get _season =>
+      int.tryParse(widget.initialRaceId?.split('-').first ?? '') ??
+      DateTime.now().year;
   late Future<RaceFeed> _request = widget.repository.load(
-    season: DateTime.now().year,
+    season: _season,
     summaries: false,
   );
 
-  void _retry() => setState(
-    () => _request = widget.repository.load(
-      season: DateTime.now().year,
-      summaries: false,
-    ),
-  );
+  void _retry() => setState(() {
+    _request = widget.repository.load(season: _season, summaries: false);
+  });
 
   @override
   Widget build(BuildContext context) => FutureBuilder<RaceFeed>(
@@ -68,11 +75,6 @@ class _BriefingPageState extends State<BriefingPage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            tr(context, 'Briefing'),
-            style: Theme.of(context).textTheme.displaySmall,
-          ),
-          const SizedBox(height: 12),
           if (race == null)
             ContentState(
               tr(context, 'No completed race is available for briefing.'),
@@ -96,25 +98,82 @@ class _BriefingPageState extends State<BriefingPage> {
               ),
               const SizedBox(height: 20),
             ],
-            Text(
-              tr(context, race.name),
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 20),
-            RaceBriefingView(
+            EditorialMediaView(
               repository: widget.repository,
               raceId: race.id,
-              showTitle: false,
+              role: 'briefing',
               spoilerHidden: hidesRaceResult(
                 enabled: widget.spoilerFree,
                 phase: race.lifecyclePhase,
                 raceId: race.id,
-                revealedSessions: widget.revealedSessions,
+                revealedSessions: {...widget.revealedSessions, ..._revealed},
               ),
-              onReveal: () =>
-                  widget.onRevealSession?.call(spoilerSessionKey(race!.id)),
-              follows: widget.follows,
+              child: EditorialHeader(
+                title: 'Briefing',
+                trailing: EditorialShare(
+                  title:
+                      '${tr(context, 'Briefing')} · ${tr(context, race.name)}',
+                  sources: [race.source],
+                ),
+                eyebrow: [
+                  if (race.round != null)
+                    '${race.round} / ${race.totalRounds ?? snapshot.data!.races.map((r) => r.round ?? 0).fold<int>(0, (a, b) => a > b ? a : b)}',
+                  tr(context, race.name),
+                ].join('   '),
+                subtitle: 'What happened and what it means.',
+              ),
             ),
+            EditorialTabs(
+              labels: const [
+                'Key stories',
+                'Race result',
+                'Quotes',
+                'Analysis',
+              ],
+              selected: _tab,
+              onChanged: (value) => setState(() => _tab = value),
+            ),
+            const SizedBox(height: 12),
+            if (_tab == 1 || _tab == 3)
+              RaceDetailPage(
+                key: ValueKey(
+                  '${race.id}-$_tab-${Localizations.localeOf(context)}',
+                ),
+                race: race,
+                repository: widget.repository,
+                follows: widget.follows,
+                section: _tab == 1 ? 'results' : 'analysis',
+                spoilerHidden: hidesRaceResult(
+                  enabled: widget.spoilerFree,
+                  phase: race.lifecyclePhase,
+                  raceId: race.id,
+                  revealedSessions: {...widget.revealedSessions, ..._revealed},
+                ),
+                onReveal: () {
+                  final key = spoilerSessionKey(race!.id);
+                  setState(() => _revealed.add(key));
+                  widget.onRevealSession?.call(key);
+                },
+              )
+            else
+              RaceBriefingView(
+                repository: widget.repository,
+                raceId: race.id,
+                showTitle: false,
+                quotesOnly: _tab == 2,
+                spoilerHidden: hidesRaceResult(
+                  enabled: widget.spoilerFree,
+                  phase: race.lifecyclePhase,
+                  raceId: race.id,
+                  revealedSessions: {...widget.revealedSessions, ..._revealed},
+                ),
+                onReveal: () {
+                  final key = spoilerSessionKey(race!.id);
+                  setState(() => _revealed.add(key));
+                  widget.onRevealSession?.call(key);
+                },
+                follows: widget.follows,
+              ),
           ],
         ],
       );

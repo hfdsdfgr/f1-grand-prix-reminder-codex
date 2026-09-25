@@ -10,15 +10,15 @@ ThemeData raceTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final scheme =
       ColorScheme.fromSeed(
-        seedColor: const Color(0xFFFF6578),
+        seedColor: const Color(0xFFFF4055),
         brightness: brightness,
       ).copyWith(
-        surface: dark ? const Color(0xFF0C0D0F) : Colors.white,
+        surface: dark ? const Color(0xFF090B0C) : Colors.white,
         surfaceContainer: dark
-            ? const Color(0xFF17191D)
+            ? const Color(0xFF111416)
             : const Color(0xFFF5F5F6),
         surfaceContainerHigh: dark
-            ? const Color(0xFF17191D)
+            ? const Color(0xFF111416)
             : const Color(0xFFF5F5F6),
         surfaceContainerHighest: dark
             ? const Color(0xFF202328)
@@ -30,18 +30,19 @@ ThemeData raceTheme(Brightness brightness) {
             ? const Color(0xFFF5F5F6)
             : const Color(0xFF202124),
         surfaceTint: Colors.transparent,
-        onSurface: dark ? const Color(0xFFF3F4F5) : const Color(0xFF202124),
+        onSurface: dark ? const Color(0xFFF2F0EB) : const Color(0xFF202124),
         onSurfaceVariant: dark
             ? const Color(0xFFA6ABB4)
             : const Color(0xFF5F6368),
-        primary: dark ? const Color(0xFFFF6578) : const Color(0xFFB52B43),
+        primary: dark ? const Color(0xFFFF4055) : const Color(0xFFB52B43),
         onPrimary: dark ? const Color(0xFF18080C) : Colors.white,
         outlineVariant: dark
-            ? const Color(0xFF30343B)
+            ? const Color(0xFF3B4143)
             : const Color(0xFFDADCE0),
       );
   return ThemeData(
     useMaterial3: true,
+    fontFamily: 'Barlow',
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
     appBarTheme: AppBarTheme(
@@ -57,20 +58,33 @@ ThemeData raceTheme(Brightness brightness) {
       ),
     ),
     textTheme: TextTheme(
+      labelMedium: const TextStyle(
+        fontFamily: 'BarlowCondensed',
+        fontSize: 12,
+        height: 1.25,
+      ),
+      labelLarge: const TextStyle(
+        fontFamily: 'BarlowCondensed',
+        fontSize: 14,
+        height: 1.3,
+      ),
       displaySmall: TextStyle(
-        fontSize: 38,
-        height: 1.15,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.8,
+        fontFamily: 'Newsreader',
+        fontSize: 44,
+        height: 1.02,
+        fontWeight: FontWeight.w500,
+        letterSpacing: -.5,
       ),
       headlineMedium: const TextStyle(
+        fontFamily: 'Newsreader',
         fontSize: 30,
         height: 1.2,
         fontWeight: FontWeight.w600,
         fontFeatures: [FontFeature.tabularFigures()],
       ),
       headlineSmall: const TextStyle(
-        fontSize: 23,
+        fontFamily: 'Newsreader',
+        fontSize: 24,
         height: 1.3,
         fontWeight: FontWeight.w600,
       ),
@@ -91,10 +105,10 @@ ThemeData raceTheme(Brightness brightness) {
         color: scheme.onSurfaceVariant,
       ),
       bodyLarge: TextStyle(fontSize: 16, height: 1.5),
-      bodyMedium: TextStyle(fontSize: 16, height: 1.5),
+      bodyMedium: TextStyle(fontSize: 16, height: 1.4),
       bodySmall: TextStyle(
         fontSize: 13,
-        height: 1.5,
+        height: 1.4,
         color: scheme.onSurfaceVariant,
       ),
     ),
@@ -148,6 +162,7 @@ ThemeData raceTheme(Brightness brightness) {
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(strokeWidth: 2),
     navigationBarTheme: NavigationBarThemeData(
+      height: 64,
       backgroundColor: scheme.surface,
       elevation: 0,
       indicatorColor: Colors.transparent,
@@ -164,7 +179,7 @@ ThemeData raceTheme(Brightness brightness) {
         (states) => TextStyle(
           fontSize: 12,
           color: states.contains(WidgetState.selected)
-              ? scheme.onSurface
+              ? scheme.primary
               : scheme.onSurfaceVariant,
         ),
       ),

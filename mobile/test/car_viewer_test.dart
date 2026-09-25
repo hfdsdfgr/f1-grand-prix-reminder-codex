@@ -358,8 +358,8 @@ void main() {
     await t.pumpAndSettle();
     expect(painter(t).selected, 'sidepods');
     expect(painter(t).focus, 1);
-    await t.ensureVisible(find.byKey(const ValueKey('heritage-redbull')));
-    await t.tap(find.byKey(const ValueKey('heritage-redbull')));
+    await t.ensureVisible(find.byKey(const PageStorageKey('heritage-redbull')));
+    await t.tap(find.byKey(const PageStorageKey('heritage-redbull')));
     await t.pumpAndSettle();
     expect(find.text('RB19'), findsWidgets);
     expect(find.text('RB21'), findsWidgets);

@@ -54,6 +54,16 @@ class EvolutionTests(unittest.TestCase):
             self.assertIsNone(chinese.upgrades[0].change)
             self.assertIsNone(chinese.upgrades[0].goal)
             self.assertEqual(load_evolution(path, 2025).upgrades, [])
+            # SQLite TEXT affinity preserves both legacy labels and numeric scores.
+            # Confidence is evidence metadata, never a boolean UI state.
+            for stored, expected in [('high', 'high'), ('0.6', '0.6'), (0.75, '0.75')]:
+                with closing(connect(path)) as db, db:
+                    db.execute("UPDATE upgrades SET confidence=? WHERE upgrade_id='sourced'", (stored,))
+                for language in ('en', 'zh-CN'):
+                    restored = load_evolution(path, 2026, language)
+                    self.assertIs(type(restored.stale), bool)
+                    self.assertIs(type(restored.upgrades[0].confidence), str)
+                    self.assertEqual(restored.upgrades[0].confidence, expected)
             with closing(connect(path)) as db, db:
                 db.execute("UPDATE evolution_source_documents SET canonical_url='javascript:alert(1)'")
             self.assertEqual(load_evolution(path, 2026).upgrades, [])

@@ -25,6 +25,129 @@ class AppLocalizationsEn extends AppLocalizations {
   String get english => 'English';
 
   @override
+  String get s_5d12ee2473eb => 'Completed races first';
+
+  @override
+  String get s_ec7b59833520 => 'Round';
+
+  @override
+  String get s_4f46c4af96ea => 'Cadillac F1 Team';
+
+  @override
+  String get s_4e312f5c76bd => 'RB F1 Team';
+
+  @override
+  String get s_146c89d5ccc6 => 'Barcelona Grand Prix';
+
+  @override
+  String get s_b861b3b2a2b4 => 'No recorded upgrades for this selection.';
+
+  @override
+  String get s_623de52267e2 => 'Drag · Pinch · Tap component';
+
+  @override
+  String get s_adab5090ac6a => 'Calendar';
+
+  @override
+  String get s_b965ae66fcc4 => 'Explore';
+
+  @override
+  String get s_87c82808e3f1 => 'Key stories';
+
+  @override
+  String get s_7b0257ce75ad => 'Quotes';
+
+  @override
+  String get s_62c7fcf46e27 => 'Analysis';
+
+  @override
+  String get s_43e924426fed => 'What happened and what it means.';
+
+  @override
+  String get s_8c5862385dca => 'How the car changed this weekend.';
+
+  @override
+  String get s_decd7ca80010 => 'Latest';
+
+  @override
+  String get s_931e1a4b152a => 'View all';
+
+  @override
+  String get s_ed3624e32d8f => 'Briefing available';
+
+  @override
+  String get s_33e5ce14a3d8 => 'documented updates';
+
+  @override
+  String get s_abdc43daf2fa => 'Saved content';
+
+  @override
+  String get s_f6bb0f468a85 => 'Days';
+
+  @override
+  String get s_9e25a34e635a => 'Hours';
+
+  @override
+  String get s_092f99ea11a3 => 'Minutes';
+
+  @override
+  String get s_14ca480390f7 => 'Local time';
+
+  @override
+  String get s_6cc3364a242c => 'Open source';
+
+  @override
+  String get s_9ee91c105645 => 'Unable to open source.';
+
+  @override
+  String get s_bc7819b34ff8 => 'Unknown';
+
+  @override
+  String get s_dc3decbb9384 => 'Details';
+
+  @override
+  String get s_a0fb821bdaf9 => 'Purpose';
+
+  @override
+  String get s_82fa7d52c89d => 'Confidence';
+
+  @override
+  String get s_a124947cbd2d => 'Low';
+
+  @override
+  String get s_9195c1116ccd => 'Review original evidence.';
+
+  @override
+  String get s_24d52bb5af2b => 'Original evidence';
+
+  @override
+  String get s_0bbf0a23272c => 'No verified quotes are available.';
+
+  @override
+  String get s_bb08d10b00a6 => 'Fullscreen';
+
+  @override
+  String get s_2dfa66079d9b => 'Standard';
+
+  @override
+  String get s_20750c3d70b9 => 'Viewer tools & knowledge';
+
+  @override
+  String get s_09ca55ca52d2 => 'Share';
+
+  @override
+  String get s_b94f001614e8 => 'Sharing is unavailable.';
+
+  @override
+  String get s_70951f0d20d9 => 'Unable to share. Please try again.';
+
+  @override
+  String get s_da356f930040 => 'Media unavailable';
+
+  @override
+  String get s_d977a86b0b4b => 'Media credit';
+
+  @override
   String get s_89b86ab0e66f => 'Language';
 
   @override

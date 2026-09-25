@@ -8,12 +8,14 @@ import '../data/race_repository.dart';
 class RaceFeedView extends StatefulWidget {
   final RaceRepository repository;
   final int? season;
+  final Widget? emptyContent;
   final Widget Function(RaceFeed) builder;
   const RaceFeedView({
     super.key,
     required this.repository,
     required this.builder,
     this.season,
+    this.emptyContent,
   });
   @override
   State<RaceFeedView> createState() => _RaceFeedViewState();
@@ -74,6 +76,7 @@ class _RaceFeedViewState extends State<RaceFeedView> {
             )
           else
             widget.builder(snapshot.hasError ? RaceFeed.staleCopy(feed) : feed),
+          if (feed.races.isEmpty) ?widget.emptyContent,
           const SizedBox(height: 24),
           Text(
             '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',

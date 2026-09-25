@@ -6,6 +6,7 @@ import '../../data/race_repository.dart';
 import '../../data/follow_service.dart';
 import '../../data/reminder_service.dart';
 import '../../shared/race_feed_view.dart';
+import '../../shared/editorial.dart';
 import 'race_detail_page.dart';
 
 class RacesPage extends StatefulWidget {
@@ -32,16 +33,14 @@ class RacesPage extends StatefulWidget {
 
 class _RacesPageState extends State<RacesPage> {
   int _season = DateTime.now().year;
+  bool _completedFirst = false;
   late final Future<List<int>> _seasons = widget.repository.seasons();
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        tr(context, 'Races'),
-        style: Theme.of(context).textTheme.displaySmall,
-      ),
-      const SizedBox(height: 24),
+      const EditorialHeader(title: 'Calendar'),
+      const SizedBox(height: 16),
       FutureBuilder<List<int>>(
         future: _seasons,
         builder: (context, snapshot) => DropdownButtonFormField<int>(
@@ -56,7 +55,17 @@ class _RacesPageState extends State<RacesPage> {
           },
         ),
       ),
-      const SizedBox(height: 32),
+      CheckboxListTile(
+        key: const ValueKey('completed-first'),
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        title: Text(
+          tr(context, 'Completed races first'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        value: _completedFirst,
+        onChanged: (value) => setState(() => _completedFirst = value!),
+      ),
       RaceFeedView(
         repository: widget.repository,
         season: _season,
@@ -76,109 +85,132 @@ class _RacesPageState extends State<RacesPage> {
                   ),
                 ),
               ),
-            for (final race in feed.races) ...[
-              InkWell(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => RaceDetailPage(
-                      race: race,
-                      repository: widget.repository,
-                      reminders: widget.reminders,
-                      syncReminders: widget.syncReminders,
-                      spoilerHidden: _hidden(race),
-                      onReveal: () => widget.onRevealSession?.call(
-                        spoilerSessionKey(race.id),
+            for (final race in _ordered(feed.races)) ...[
+              Semantics(
+                button: true,
+                hint: tr(context, 'View details'),
+                child: InkWell(
+                  key: ValueKey('calendar-${race.id}'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => RaceDetailPage(
+                        race: race,
+                        repository: widget.repository,
+                        reminders: widget.reminders,
+                        syncReminders: widget.syncReminders,
+                        spoilerHidden: _hidden(race),
+                        onReveal: () => widget.onRevealSession?.call(
+                          spoilerSessionKey(race.id),
+                        ),
+                        follows: widget.follows,
                       ),
-                      follows: widget.follows,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 36,
+                          child: Semantics(
+                            label:
+                                '${tr(context, 'Round')} ${race.round ?? ''}',
+                            child: Text(
+                              race.round?.toString().padLeft(2, '0') ?? '—',
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                tr(context, race.name),
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 2),
+                              Tooltip(
+                                message: tr(context, race.circuit),
+                                child: Text(
+                                  tr(context, race.circuit),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                              Text(
+                                MaterialLocalizations.of(
+                                  context,
+                                ).formatMediumDate(
+                                  race.startsAt ?? DateTime.parse(race.date),
+                                ),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _stateLabel(context, race),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: _completed(race)
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tr(context, race.name),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        tr(
-                          context,
-                          race.lifecyclePhase == 'race_weekend'
-                              ? 'Race weekend'
-                              : race.status == 'completed'
-                              ? 'Race completed'
-                              : 'Pre-race',
-                        ),
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: race.lifecyclePhase == 'race_weekend'
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      Text(
-                        tr(context, race.circuit),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      Text(
-                        race.startsAt == null
-                            ? '${race.date} · ${tr(context, 'Time to be confirmed')}'
-                            : localDate(context, race.startsAt!),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      if (race.status == 'completed' && _hidden(race)) ...[
-                        const SizedBox(height: 12),
-                        Text(tr(context, 'Race completed')),
-                        Text(
-                          tr(context, 'Results hidden'),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        TextButton(
-                          onPressed: () => widget.onRevealSession?.call(
-                            spoilerSessionKey(race.id),
-                          ),
-                          child: Text(tr(context, 'Reveal results')),
-                        ),
-                      ] else if (race.status == 'completed') ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          '${tr(context, 'Winner')}: ${race.summary?.winner ?? tr(context, 'Not available')}',
-                        ),
-                        if (race.summary?.winnerTeam case final team?)
-                          Text(
-                            tr(context, team),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${tr(context, 'Fastest lap')}: ${race.summary?.fastestLapDriver ?? tr(context, 'Not available')}',
-                        ),
-                        if (race.summary?.fastestLapTime case final time?)
-                          Text(
-                            '$time${race.summary?.fastestLapNumber == null ? '' : ' · ${tr(context, 'Lap')} ${race.summary!.fastestLapNumber}'}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                      ],
-                      const SizedBox(height: 8),
-                      Text(
-                        tr(context, 'View details'),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
-              const Divider(),
+              const Divider(height: 1),
             ],
           ],
         ),
       ),
     ],
   );
+
+  bool _completed(Race race) =>
+      race.status == 'completed' || race.lifecyclePhase == 'post_race';
+
+  List<Race> _ordered(List<Race> races) => [...races]
+    ..sort((a, b) {
+      final aFirst = _completed(a) == _completedFirst;
+      final bFirst = _completed(b) == _completedFirst;
+      if (aFirst != bFirst) return aFirst ? -1 : 1;
+      final order = a.round != null && b.round != null
+          ? a.round!.compareTo(b.round!)
+          : a.date.compareTo(b.date);
+      return order != 0 ? order : a.id.compareTo(b.id);
+    });
+
+  String _stateLabel(BuildContext context, Race race) {
+    if (_completed(race)) {
+      if (_hidden(race)) return tr(context, 'Results hidden');
+      final winner = race.summary?.winner;
+      return winner == null
+          ? tr(context, 'Race completed')
+          : '${tr(context, 'Winner')}: $winner';
+    }
+    return tr(
+      context,
+      race.lifecyclePhase == 'race_weekend' ? 'Race weekend' : 'Upcoming',
+    );
+  }
 
   bool _hidden(Race race) => hidesRaceResult(
     enabled: widget.spoilerFree,

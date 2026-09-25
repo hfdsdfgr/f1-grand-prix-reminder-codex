@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme.dart';
 import 'presentation.dart';
+import 'editorial.dart';
+import 'editorial_media.dart';
 
 import '../core/language.dart';
 import '../data/follow_service.dart';
@@ -13,6 +14,7 @@ class RaceBriefingView extends StatefulWidget {
   final RaceRepository repository;
   final String raceId;
   final bool showTitle;
+  final bool quotesOnly;
   final bool spoilerHidden;
   final VoidCallback? onReveal;
   final FollowService? follows;
@@ -21,6 +23,7 @@ class RaceBriefingView extends StatefulWidget {
     required this.repository,
     required this.raceId,
     this.showTitle = true,
+    this.quotesOnly = false,
     this.spoilerHidden = false,
     this.onReveal,
     this.follows,
@@ -35,6 +38,10 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
     widget.raceId,
   );
   RaceBriefingFeed? _saved;
+  Future<List<EditorialMedia>> _loadMedia() => widget.repository
+      .media(widget.raceId)
+      .catchError((_) => <EditorialMedia>[]);
+  late Future<List<EditorialMedia>> _media = _loadMedia();
   String? _language;
 
   @override
@@ -44,6 +51,7 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
     if (_language != null && _language != language) {
       _saved = null;
       _request = widget.repository.briefing(widget.raceId);
+      _media = _loadMedia();
     }
     _language = language;
   }
@@ -54,6 +62,7 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
     if (oldWidget.raceId != widget.raceId) {
       _saved = null;
       _request = widget.repository.briefing(widget.raceId);
+      _media = _loadMedia();
     }
   }
 
@@ -116,12 +125,64 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
           AnimatedBuilder(
             animation: widget.follows ?? _neverNotify,
             builder: (context, _) {
-              final insights = [...briefing.insights]
-                ..sort((a, b) => _followScore(b).compareTo(_followScore(a)));
-              return Column(
-                children: [
-                  for (final insight in insights) _Insight(insight: insight),
-                ],
+              final insights = [
+                ...briefing.insights.where(
+                  (i) =>
+                      !widget.quotesOnly ||
+                      (i.field == 'key_quotes' && i.evidence.isNotEmpty),
+                ),
+              ]..sort((a, b) => _followScore(b).compareTo(_followScore(a)));
+              return FutureBuilder<List<EditorialMedia>>(
+                future: _media,
+                builder: (context, mediaSnapshot) {
+                  final media = mediaSnapshot.data ?? <EditorialMedia>[];
+                  return Column(
+                    children: [
+                      if (insights.isEmpty && widget.quotesOnly)
+                        ContentState(
+                          tr(context, 'No verified quotes are available.'),
+                        ),
+                      for (var i = 0; i < insights.length; i++)
+                        EditorialRow(
+                          number: i + 1,
+                          thumbnail: _thumbnail(media, insights[i].topic),
+                          title: insights[i].topic,
+                          detail: widget.quotesOnly
+                              ? insights[i].evidence
+                                    .map((e) => e.quote)
+                                    .join('\n\n')
+                              : insights[i].detail,
+                          onTap: () => showEditorialDetail(
+                            context,
+                            title: tr(context, insights[i].topic),
+                            body: widget.quotesOnly
+                                ? insights[i].evidence
+                                      .map((e) => e.quote)
+                                      .join('\n\n')
+                                : insights[i].detail,
+                            sources: [
+                              for (final evidence in insights[i].evidence) ...[
+                                if (!widget.quotesOnly)
+                                  EvidenceField(
+                                    'Original evidence',
+                                    evidence.quote,
+                                  ),
+                                SourceReference(
+                                  publisher: evidence.source.provider,
+                                  url: evidence.source.url,
+                                ),
+                              ],
+                              for (final source in insights[i].sources)
+                                SourceReference(
+                                  publisher: source.provider,
+                                  url: source.url,
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -138,6 +199,13 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
       );
     },
   );
+
+  Widget? _thumbnail(List<EditorialMedia> media, String topic) {
+    final item = media
+        .where((m) => m.role == 'story' && m.topic == topic)
+        .firstOrNull;
+    return item == null ? null : EditorialMediaImage(item: item, compact: true);
+  }
 
   int _followScore(BriefingInsight insight) {
     final follows = widget.follows;
@@ -177,35 +245,6 @@ class _RaceBriefingViewState extends State<RaceBriefingView> {
       ),
     );
   }
-}
-
-class _Insight extends StatelessWidget {
-  final BriefingInsight insight;
-  const _Insight({required this.insight});
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    label: '${tr(context, insight.topic)}. ${insight.detail}',
-    child: ExcludeSemantics(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: RaceSpace.large),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              tr(context, insight.topic),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: RaceSpace.small),
-            Text(insight.detail, style: Theme.of(context).textTheme.bodyLarge),
-            const SizedBox(height: RaceSpace.large),
-            const Divider(),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class _BriefingSpoilerGate extends StatelessWidget {
