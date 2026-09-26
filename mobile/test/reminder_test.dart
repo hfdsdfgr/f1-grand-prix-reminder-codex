@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:grand_prix_reminder/data/race_repository.dart';
 import 'package:grand_prix_reminder/data/reminder_service.dart';
 import 'package:grand_prix_reminder/app.dart';
+import 'package:grand_prix_reminder/features/home/reminder_controls.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -15,7 +16,8 @@ import 'dart:convert';
 import 'app_test.dart' show fixture;
 
 void main() {
-  final dispatcher = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
+  final dispatcher =
+      TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher;
   dispatcher.localeTestValue = const Locale('zh', 'CN');
   dispatcher.localesTestValue = const [Locale('zh', 'CN')];
   const channel = MethodChannel('dexterous.com/flutter/local_notifications');
@@ -239,7 +241,13 @@ void main() {
     await tester.ensureVisible(find.text('赛事提醒'));
     await tester.tap(find.text('赛事提醒'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('系统本地提醒仅支持'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ReminderSheet),
+        matching: find.textContaining('系统本地提醒仅支持'),
+      ),
+      findsOneWidget,
+    );
     final button = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, '保存提醒'),
     );

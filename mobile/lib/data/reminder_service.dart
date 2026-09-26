@@ -229,6 +229,17 @@ class ReminderService {
     }
   });
 
+  /// Read system permission state without requesting access or scheduling.
+  Future<String?> permissionIssue() async {
+    try {
+      await _initialize();
+      await _checkPermissions();
+      return null;
+    } on ReminderException catch (error) {
+      return error.message;
+    }
+  }
+
   Future<void> _checkPermissions() async {
     final android = _plugin
         .resolvePlatformSpecificImplementation<

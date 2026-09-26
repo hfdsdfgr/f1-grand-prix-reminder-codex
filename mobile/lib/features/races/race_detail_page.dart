@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import '../../shared/presentation.dart';
+import '../../shared/team_identity.dart';
 
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -311,12 +312,16 @@ class _RaceDetailPageState extends State<RaceDetailPage> {
                         '${entry.classification}. ${entry.driver}',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      Text(
-                        tr(context, entry.team),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      if (widget.section == 'results')
+                        TeamIdentity.compact(
+                          teamId: entry.teamId,
+                          teamName: entry.team,
+                        )
+                      else
+                        TeamIdentity(
+                          teamId: entry.teamId,
+                          teamName: entry.team,
                         ),
-                      ),
                       if (widget.follows case final follows?) ...[
                         const SizedBox(height: 8),
                         _FollowActions(

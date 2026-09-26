@@ -25,6 +25,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get english => 'English';
 
   @override
+  String get s_df174a3f2faa => 'Enabled';
+
+  @override
+  String get s_83383b8dff68 => 'Not enabled';
+
+  @override
+  String get s_8069d829ce86 => 'Checking notification permission';
+
+  @override
+  String get s_0c7231cef38e => 'Notification permission unknown';
+
+  @override
+  String get s_53e34997d5eb => 'Notifications allowed';
+
+  @override
   String get s_5d12ee2473eb => 'Completed races first';
 
   @override

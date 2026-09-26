@@ -11,6 +11,7 @@ import 'package:http/testing.dart';
 import 'package:grand_prix_reminder/core/theme.dart';
 import 'package:grand_prix_reminder/data/race_repository.dart';
 import 'package:grand_prix_reminder/features/briefing/briefing_page.dart';
+import 'package:grand_prix_reminder/features/home/home_page.dart';
 import 'package:grand_prix_reminder/features/evolution/evolution_page.dart';
 import 'package:grand_prix_reminder/features/races/races_page.dart';
 import 'package:grand_prix_reminder/features/races/race_detail_page.dart';
@@ -27,9 +28,25 @@ RaceRepository repository(String language) => RaceRepository(
   client: MockClient((request) async {
     final endpoint = request.url.path.split('/').last;
     final String body;
-    if (endpoint == 'evolution') {
-      body = File('test/fixtures/evolution/2026-$language.json')
-          .readAsStringSync();
+    if (endpoint == 'next-race') {
+      final feed = jsonDecode(captured('races-en')) as Map<String, dynamic>;
+      final races = feed['races'] as List;
+      // Reuse the captured Singapore race unchanged in the next-race envelope.
+      feed['race'] = races.singleWhere((r) => r['id'] == '2026-17');
+      feed.remove('races');
+      body = jsonEncode(feed);
+    } else if (request.url.path.contains('/evolution')) {
+      final feed = jsonDecode(
+        File('test/fixtures/evolution/2026-$language.json').readAsStringSync(),
+      ) as Map<String, dynamic>;
+      if (endpoint != 'evolution') {
+        for (final key in ['upgrades', 'timeline']) {
+          feed[key] = (feed[key] as List)
+              .where((entry) => entry['race_id'] == endpoint)
+              .toList();
+        }
+      }
+      body = jsonEncode(feed);
     } else {
       final lang = endpoint == 'briefing' ? language : 'en';
       body = captured('$endpoint-$lang');
@@ -200,6 +217,7 @@ void main() {
           jsonDecode(captured('races-en')) as Map<String, dynamic>,
         ).races.firstWhere((r) => r.id == '2026-14');
         final pages = {
+          'home': HomePage(repository: repo),
           'calendar': RacesPage(repository: repo),
           'evolution': EvolutionPage(repository: repo, enableGltf: false),
           'briefing': BriefingPage(repository: repo, initialRaceId: race.id),
@@ -231,6 +249,11 @@ void main() {
           );
           expect(find.byType(ErrorWidget), findsNothing);
           if (scale == 1) await capture(t, '${entry.key}-$language');
+          if (entry.key == 'home' && scale == 1) {
+            await t.ensureVisible(find.byKey(const ValueKey('home-details')));
+            await t.pumpAndSettle();
+            await capture(t, 'home-actions-$language');
+          }
           await t.pumpWidget(const SizedBox());
         }
       });

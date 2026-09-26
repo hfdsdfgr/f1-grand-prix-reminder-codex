@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/language.dart';
 import '../data/follow_service.dart';
 import '../data/race_repository.dart';
+import 'team_identity.dart';
 
 /// Source-backed, season-specific context for the user's saved follows.
 class FollowContext extends StatefulWidget {
@@ -76,7 +77,18 @@ class _FollowContextState extends State<FollowContext> {
                     for (final entry in entries)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text('${entry.driver} · ${entry.team}'),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(entry.driver),
+                            TeamIdentity.label(
+                              teamId: entry.teamId,
+                              teamName: entry.team,
+                            ),
+                          ],
+                        ),
                       ),
                     if (roster.stale)
                       Padding(

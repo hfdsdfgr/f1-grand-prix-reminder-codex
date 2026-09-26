@@ -107,7 +107,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('本赛季关注'), findsOneWidget);
-    expect(find.text('Lando Norris · McLaren'), findsOneWidget);
+    expect(find.text('Lando Norris'), findsOneWidget);
+    expect(find.text('McLaren'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

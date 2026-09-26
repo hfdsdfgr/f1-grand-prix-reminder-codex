@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../shared/presentation.dart';
 import '../../shared/editorial.dart';
+import '../../shared/team_identity.dart';
 import 'component_explorer.dart';
 
 import '../../core/language.dart';
@@ -242,12 +243,18 @@ class _EvolutionPageState extends State<EvolutionPage> {
               for (final item in carTeams)
                 DropdownMenuItem(
                   value: item.id,
-                  child: Text(tr(context, item.name)),
+                  child: TeamIdentity.label(
+                    teamId: item.id,
+                    teamName: item.name,
+                  ),
                 ),
               for (final item in extraTeams.entries)
                 DropdownMenuItem(
                   value: item.key,
-                  child: Text(tr(context, item.value)),
+                  child: TeamIdentity.label(
+                    teamId: item.key,
+                    teamName: item.value,
+                  ),
                 ),
             ],
             onChanged: (value) => setState(() {

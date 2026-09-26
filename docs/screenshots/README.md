@@ -1,15 +1,31 @@
-# Product screenshot checklist
+# Screenshot provenance
 
-The four images in this directory are unaltered screenshots supplied from the running Android app for the v1.0.0 repository presentation. Each is 576 × 1280 pixels. Their identical dimensions allow a consistent gallery without generated UI or layout reconstruction.
+## Release 1.1
 
-| File | Screen | Status |
-| --- | --- | --- |
-| `home.jpg` | Next race, countdown and reminder entry | Supplied |
-| `races.jpg` | 2026 race calendar | Supplied |
-| `briefing.jpg` | Spanish Grand Prix Briefing | Supplied |
-| `explorer.jpg` | Evolution 3D car and controls | Supplied |
-| `evolution-timeline.jpg` | Published upgrade timeline and source detail | Awaiting a real app screenshot; no image is linked until supplied |
+`v1.1/` contains fresh captures from the current Flutter pages, generated on 2026-09-27 by `mobile/test/ui_qa_test.dart`. English and Simplified Chinese images are 390 by 844 logical pixels. They use recorded production payloads in `mobile/test/fixtures/ui_qa/` and `mobile/test/fixtures/evolution/`, rather than current network responses.
 
-The Android status and navigation bars remain visible to preserve the supplied pixels. For a future replacement, capture the same release build, race and language context, then replace only the corresponding image. Screenshots show application behavior at capture time; race data and availability can change.
+The Home next-race envelope selects the captured Singapore race unchanged. Race-specific Evolution responses filter the captured season feed by race ID. No new race facts are authored for screenshots. Capture-time countdowns differ from the payload's historical update timestamp.
 
-The ready-to-upload GitHub Social Preview is [`../social-preview-v1.0.0.jpg`](../social-preview-v1.0.0.jpg), composed from the supplied Home and Evolution screenshots. It is 1280 × 640 and under GitHub's 1 MB upload limit. Upload it under repository **Settings → Social preview → Edit → Upload an image**.
+| Prefix | Page |
+| --- | --- |
+| `home` | Home upper section |
+| `home-actions` | Detail/reminder rows and updated footer |
+| `calendar-upcoming` | Upcoming-first Calendar |
+| `briefing` | Source-backed Briefing |
+| `evolution` | Evolution with test illustration rendering |
+| `detail` | GP Detail and Team Identity |
+| `settings` | Settings |
+
+Each has `-en.png` and `-zh-CN.png` variants. The test harness renders page content, without native status/navigation bars or the full app navigation shell. Home has no native reminder service in this harness and shows the platform-unavailable message. Evolution uses `enableGltf: false`; it does not demonstrate the production GPU renderer. These are rendered widgets, not generated artwork or reconstructed mockups.
+
+Reproduce from `mobile/` with `flutter test test/ui_qa_test.dart`. Fonts include project assets and Windows Microsoft YaHei for Chinese. Output goes to `.tools/ui-qa/`; copy selected captures here after inspection.
+
+The signed APK was separately installed and launched on an Android emulator. Online acceptance was blocked by production endpoint timeouts; see [release validation](../release-notes-v1.1.0.md).
+
+## Archived 1.0 images
+
+Root-level `home.jpg`, `races.jpg`, `briefing.jpg` and `explorer.jpg` are supplied 1.0 Android screenshots at 576 by 1280. They remain historical assets and are not used as 1.1 gallery images. `../social-preview-v1.0.0.jpg` is an archived 1.0 composition.
+
+## Signed Android build capture
+
+[Settings on API 35](v1.1/android-settings-en.png) is an unmodified 1080 by 2400 screenshot of the installed, signed 1.1.0 APK, including Android system bars and the app navigation shell. This offline settings capture is separate from the page regression gallery.

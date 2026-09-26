@@ -13,7 +13,7 @@ import '../../core/spoilers.dart';
 import '../../data/race_repository.dart';
 import '../../data/follow_service.dart';
 import '../../data/reminder_service.dart';
-import 'reminder_controls.dart';
+import 'reminder_row.dart';
 import '../../shared/race_feed_view.dart';
 import '../../shared/follow_context.dart';
 import '../races/race_detail_page.dart';
@@ -41,6 +41,7 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => RaceFeedView(
     repository: repository,
+    inlineFooter: true,
     emptyContent: LatestSection(
       repository: repository,
       season: DateTime.now().year,
@@ -263,8 +264,9 @@ class HomePage extends StatelessWidget {
             follows: follows,
           ),
           const SizedBox(height: 20),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).push(
+          InkWell(
+            key: const ValueKey('home-details'),
+            onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => RaceDetailPage(
                   race: race,
@@ -283,11 +285,23 @@ class HomePage extends StatelessWidget {
                 ),
               ),
             ),
-            icon: const Icon(Icons.arrow_forward),
-            label: Text(tr(context, 'View details')),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      tr(context, 'View details'),
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward, size: 18),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 24),
-          ReminderControls(
+          const Divider(),
+          ReminderRow(
             race: race,
             service: reminders,
             stale: feed.stale,
@@ -300,12 +314,6 @@ class HomePage extends StatelessWidget {
           ),
           if (race.sessions.isEmpty)
             Text(tr(context, 'Session times have not been published.')),
-          const SizedBox(height: 24),
-          Text(
-            tr(context, 'Source: Jolpica F1'),
-            style: theme.textTheme.bodySmall,
-          ),
-          SelectableText(race.source, style: theme.textTheme.bodySmall),
         ],
       );
     },

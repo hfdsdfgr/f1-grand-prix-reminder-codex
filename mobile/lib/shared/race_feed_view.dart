@@ -9,6 +9,7 @@ class RaceFeedView extends StatefulWidget {
   final RaceRepository repository;
   final int? season;
   final Widget? emptyContent;
+  final bool inlineFooter;
   final Widget Function(RaceFeed) builder;
   const RaceFeedView({
     super.key,
@@ -16,6 +17,7 @@ class RaceFeedView extends StatefulWidget {
     required this.builder,
     this.season,
     this.emptyContent,
+    this.inlineFooter = false,
   });
   @override
   State<RaceFeedView> createState() => _RaceFeedViewState();
@@ -78,15 +80,33 @@ class _RaceFeedViewState extends State<RaceFeedView> {
             widget.builder(snapshot.hasError ? RaceFeed.staleCopy(feed) : feed),
           if (feed.races.isEmpty) ?widget.emptyContent,
           const SizedBox(height: 24),
-          Text(
-            '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          TextButton.icon(
-            onPressed: _retry,
-            icon: const Icon(Icons.refresh),
-            label: Text(tr(context, 'Refresh')),
-          ),
+          if (widget.inlineFooter)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _retry,
+                  tooltip: tr(context, 'Refresh'),
+                  icon: const Icon(Icons.refresh, size: 18),
+                ),
+              ],
+            )
+          else ...[
+            Text(
+              '${tr(context, 'Updated')} ${localDate(context, feed.updatedAt)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            TextButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: Text(tr(context, 'Refresh')),
+            ),
+          ],
         ],
       );
     },

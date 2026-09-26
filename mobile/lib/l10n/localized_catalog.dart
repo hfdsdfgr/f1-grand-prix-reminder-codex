@@ -7,6 +7,11 @@ String localizedText(BuildContext context, String text) {
   final strings = AppLocalizations.of(context);
   if (strings == null) return text;
   return switch (text) {
+    'Enabled' => strings.s_df174a3f2faa,
+    'Not enabled' => strings.s_83383b8dff68,
+    'Checking notification permission' => strings.s_8069d829ce86,
+    'Notification permission unknown' => strings.s_0c7231cef38e,
+    'Notifications allowed' => strings.s_53e34997d5eb,
     'Completed races first' => strings.s_5d12ee2473eb,
     'Round' => strings.s_ec7b59833520,
     'Cadillac F1 Team' => strings.s_4f46c4af96ea,

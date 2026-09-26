@@ -1,4 +1,7 @@
-param([string]$ProductionApiUrl = 'http://8.134.70.237')
+param(
+    [string]$ProductionApiUrl = 'http://8.134.70.237',
+    [switch]$SkipApiCheck
+)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $androidRoot = Join-Path $projectRoot 'mobile/android'
@@ -15,8 +18,12 @@ if ($url -ne 'http://8.134.70.237' -and
      [Net.IPAddress]::TryParse($origin.Host, [ref]$ipAddress))) {
     throw 'ProductionApiUrl must be the approved ECS HTTP origin or an HTTPS domain origin.'
 }
-$nextRace = Invoke-RestMethod -Uri "$url/api/v1/next-race" -TimeoutSec 15
-if (-not $nextRace.updated_at) { throw 'Production backend API check failed.' }
+if ($SkipApiCheck) {
+    Write-Warning 'API availability check skipped; validate connectivity before distribution.'
+} else {
+    $nextRace = Invoke-RestMethod -Uri "$url/api/v1/next-race" -TimeoutSec 15
+    if (-not $nextRace.updated_at) { throw 'Production backend API check failed.' }
+}
 
 $env:ANDROID_HOME = Join-Path $projectRoot '.tools/android-sdk'
 $env:JAVA_HOME = 'C:\Program Files\Microsoft\jdk-17.0.12.7-hotspot'
@@ -31,6 +38,9 @@ if ($env:HTTPS_PROXY) {
     $env:GRADLE_OPTS += " -Dhttps.proxyHost=$($proxy.Host) -Dhttps.proxyPort=$($proxy.Port) -Dhttp.proxyHost=$($proxy.Host) -Dhttp.proxyPort=$($proxy.Port)"
 }
 $flutter = Join-Path $projectRoot '.tools/flutter/bin/flutter.bat'
+$versionLine = Select-String -LiteralPath (Join-Path $projectRoot 'mobile/pubspec.yaml') -Pattern '^version: (\d+\.\d+\.\d+)\+\d+$'
+if (-not $versionLine) { throw 'pubspec.yaml must declare a release version and build number.' }
+$releaseVersion = $versionLine.Matches[0].Groups[1].Value
 $defines = @('--dart-define=API_ENV=production', "--dart-define=API_BASE_URL=$url")
 Push-Location (Join-Path $projectRoot 'mobile')
 try {
@@ -40,10 +50,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Release AAB build failed.' }
     $candidateDir = Join-Path $projectRoot 'mobile/build/release-candidate'
     New-Item -ItemType Directory -Force $candidateDir | Out-Null
-    Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-release.apk' -Destination (Join-Path $candidateDir 'GrandPrixReminder-v1.0.0.apk') -Force
-    Copy-Item -LiteralPath 'build/app/outputs/bundle/release/app-release.aab' -Destination (Join-Path $candidateDir 'GrandPrixReminder-v1.0.0.aab') -Force
-    Get-Item -LiteralPath (Join-Path $candidateDir 'GrandPrixReminder-v1.0.0.apk'),
-        (Join-Path $candidateDir 'GrandPrixReminder-v1.0.0.aab') |
+    Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-release.apk' -Destination (Join-Path $candidateDir "GrandPrixReminder-v$releaseVersion.apk") -Force
+    Copy-Item -LiteralPath 'build/app/outputs/bundle/release/app-release.aab' -Destination (Join-Path $candidateDir "GrandPrixReminder-v$releaseVersion.aab") -Force
+    Get-Item -LiteralPath (Join-Path $candidateDir "GrandPrixReminder-v$releaseVersion.apk"),
+        (Join-Path $candidateDir "GrandPrixReminder-v$releaseVersion.aab") |
         Select-Object FullName, Length, LastWriteTime
 } finally {
     Pop-Location

@@ -345,7 +345,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Following this season'), findsOneWidget);
-    expect(find.text('Test Driver · Test Team'), findsOneWidget);
+    expect(find.text('Test Driver'), findsOneWidget);
+    expect(find.text('Test Team'), findsOneWidget);
   });
 
   testWidgets(

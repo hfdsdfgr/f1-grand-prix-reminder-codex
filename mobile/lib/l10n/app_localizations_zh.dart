@@ -25,6 +25,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get english => 'English';
 
   @override
+  String get s_df174a3f2faa => '已开启';
+
+  @override
+  String get s_83383b8dff68 => '未启用';
+
+  @override
+  String get s_8069d829ce86 => '正在检查通知权限';
+
+  @override
+  String get s_0c7231cef38e => '通知权限状态未知';
+
+  @override
+  String get s_53e34997d5eb => '通知权限已允许';
+
+  @override
   String get s_5d12ee2473eb => '优先查看已完成的比赛';
 
   @override
@@ -1099,6 +1114,21 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get english => 'English';
+
+  @override
+  String get s_df174a3f2faa => '已开启';
+
+  @override
+  String get s_83383b8dff68 => '未启用';
+
+  @override
+  String get s_8069d829ce86 => '正在检查通知权限';
+
+  @override
+  String get s_0c7231cef38e => '通知权限状态未知';
+
+  @override
+  String get s_53e34997d5eb => '通知权限已允许';
 
   @override
   String get s_5d12ee2473eb => '优先查看已完成的比赛';

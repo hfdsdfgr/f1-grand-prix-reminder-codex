@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import '../../shared/presentation.dart';
+import '../../shared/team_identity.dart';
 
 import '../../core/language.dart';
 import '../../data/follow_service.dart';
@@ -158,7 +159,9 @@ class _FollowList extends StatelessWidget {
         for (final entry in entries)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(entry.name),
+            title: title == 'Followed teams'
+                ? TeamIdentity(teamId: entry.id, teamName: entry.name)
+                : Text(entry.name),
             trailing: IconButton(
               tooltip: tr(context, 'Unfollow'),
               onPressed: () => onRemove(entry.id, entry.name),

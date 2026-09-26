@@ -129,6 +129,36 @@ abstract class AppLocalizations {
   /// **'English'**
   String get english;
 
+  /// No description provided for @s_df174a3f2faa.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get s_df174a3f2faa;
+
+  /// No description provided for @s_83383b8dff68.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enabled'**
+  String get s_83383b8dff68;
+
+  /// No description provided for @s_8069d829ce86.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking notification permission'**
+  String get s_8069d829ce86;
+
+  /// No description provided for @s_0c7231cef38e.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification permission unknown'**
+  String get s_0c7231cef38e;
+
+  /// No description provided for @s_53e34997d5eb.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications allowed'**
+  String get s_53e34997d5eb;
+
   /// No description provided for @s_5d12ee2473eb.
   ///
   /// In en, this message translates to:

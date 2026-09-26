@@ -4,6 +4,7 @@ import '../../core/language.dart';
 import '../../core/theme.dart';
 import '../../data/race_repository.dart';
 import '../../shared/editorial.dart';
+import '../../shared/team_identity.dart';
 import '../../shared/presentation.dart';
 import 'car_model.dart';
 import 'car_viewer.dart';
@@ -92,7 +93,7 @@ class _ComponentExplorerState extends State<ComponentExplorer> {
                   tr(context, entry.race ?? 'Unknown'),
                 ].join(' / '),
               ),
-              EditorialLabel(entry.team),
+              TeamIdentity(teamId: entry.teamId, teamName: entry.team),
               if (widget.stale)
                 ContentState(
                   tr(context, 'Showing saved upgrades. They may have changed.'),

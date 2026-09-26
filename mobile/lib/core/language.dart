@@ -24,6 +24,11 @@ String sessionStatusLabel(String status) => switch (status) {
 };
 
 const chineseTranslations = {
+  'Enabled': '已开启',
+  'Not enabled': '未启用',
+  'Checking notification permission': '正在检查通知权限',
+  'Notification permission unknown': '通知权限状态未知',
+  'Notifications allowed': '通知权限已允许',
   'Completed races first': '优先查看已完成的比赛',
   'Round': '分站',
   'Cadillac F1 Team': '凯迪拉克 F1 车队',
